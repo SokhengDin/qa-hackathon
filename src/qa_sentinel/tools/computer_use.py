@@ -45,6 +45,14 @@ and do not restart the sequence from the beginning after already making
 progress. If you are unsure whether the last action worked, take one more
 look at the current screen rather than redoing the action. Stop and report
 as soon as the instruction's goal is met or clearly cannot be met.
+
+RULE 5 — Every turn's function_result includes a line "PROGRESS: turn X of Y
+remaining, actions so far: [...]" listing the exact actions you have already
+taken this run. Before choosing your next action, check that list: if the
+action you are about to take (same name + same target) already appears in
+it, do NOT repeat it — instead stop and report the current state as your
+final answer. When only 1-2 turns remain, stop acting and report your best
+assessment of the current screen instead of attempting anything new.
 """.strip()
 
 
@@ -105,6 +113,17 @@ async def run_ui_test_step(
                 final_text = "Action blocked by safety system; halted per policy (see tasks/task_4.md §2.3)."
                 break
 
+            repeated = _detect_repeat(function_calls, actions_taken)
+            if repeated:
+                status     = "failed"
+                final_text = (
+                    f"Stopped: model attempted to repeat action '{repeated}' that was "
+                    "already performed this run — treating this as stuck-in-loop rather "
+                    "than continuing to burn turns."
+                )
+                log.append({"category": "safety_response", "turn": turn, "decision": "loop_detected", "explanation": final_text})
+                break
+
             results = await _execute_function_calls(function_calls, page, screen_width, screen_height)
             for call_id in acknowledge_ids:
                 results.setdefault(call_id, {})["safety_acknowledgement"] = True
@@ -123,7 +142,9 @@ async def run_ui_test_step(
                 })
 
             await page.wait_for_load_state(timeout=5000)
-            function_responses = await _build_function_responses(page, function_calls, results)
+            function_responses = await _build_function_responses(
+                page, function_calls, results, turn=turn, actions_taken=actions_taken,
+            )
             log.append({"category": "screenshot", "turn": turn + 1, "url": page.url})
 
             try:
@@ -249,11 +270,35 @@ async def _execute_function_calls(function_calls, page, w, h) -> dict:
     return results
 
 
-async def _build_function_responses(page, function_calls, results) -> list[dict]:
+def _action_signature(name: str, args: dict) -> str:
+    target = {k: v for k, v in args.items() if k in ("x", "y", "text", "url", "key", "keys", "direction")}
+    return f"{name}({target})"
+
+
+def _detect_repeat(function_calls, actions_taken: list[dict]) -> str | None:
+    done_signatures = {_action_signature(a["action"], a["args"]) for a in actions_taken}
+    for fc in function_calls:
+        if fc.name in ("wait", "take_screenshot"):
+            continue
+        signature = _action_signature(fc.name, fc.arguments)
+        if signature in done_signatures:
+            return signature
+    return None
+
+
+async def _build_function_responses(page, function_calls, results, turn: int, actions_taken: list[dict]) -> list[dict]:
     screenshot_bytes = await page.screenshot(type="png")
     screenshot_b64   = base64.b64encode(screenshot_bytes).decode("utf-8")
     current_url      = page.url
     responses        = []
+
+    turns_remaining = TURN_LIMIT - (turn + 1)
+    progress_note   = (
+        f"PROGRESS: turn {turn + 1} of {TURN_LIMIT} used, {turns_remaining} remaining. "
+        f"Actions already taken this run: {[a['action'] for a in actions_taken]}. "
+        "Do not repeat any of these — if the next step you'd take matches one already "
+        "done, stop and report the current state instead."
+    )
 
     for fc in function_calls:
         responses.append({
@@ -261,7 +306,7 @@ async def _build_function_responses(page, function_calls, results) -> list[dict]
             "name":    fc.name,
             "call_id": fc.id,
             "result": [
-                {"type": "text",  "text": json.dumps({"url": current_url, **results[fc.id]})},
+                {"type": "text",  "text": json.dumps({"url": current_url, "progress": progress_note, **results[fc.id]})},
                 {"type": "image", "data": screenshot_b64, "mime_type": "image/png"},
             ],
         })
