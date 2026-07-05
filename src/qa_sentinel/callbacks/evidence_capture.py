@@ -84,6 +84,12 @@ def inject_repo_url_for_fix(tool, args, tool_context):
 
 
 def inject_repo_full_name(tool, args, tool_context):
+    """Also injects the real evidence bundle from state instead of trusting
+    PRAgent to reconstruct it — it was observed inventing its own shape
+    (console_errors as a string, network_response instead of
+    network_failures, confidence_score instead of confidence), which crashed
+    open_evidence_pr's direct dict indexing. Same fix pattern as
+    inject_repo_url_for_fix for dispatch_fix_locally."""
     if tool.name != "open_evidence_pr":
         return None
 
@@ -101,8 +107,15 @@ def inject_repo_full_name(tool, args, tool_context):
             "message": "No branch was pushed by FixWriter for this step — cannot open a PR without a real head branch.",
         }
 
+    step_id = tool_context.state.get("current_step_id")
     args["repo_full_name"] = repo_full_name
     args["branch_name"]    = branch_name
+    args["evidence"] = {
+        "console_errors"     : tool_context.state.get(f"evidence.{step_id}.console", []),
+        "network_failures"   : tool_context.state.get(f"evidence.{step_id}.network", []),
+        "model_stated_intent": tool_context.state.get(f"evidence.{step_id}.intent", ""),
+        "confidence"         : tool_context.state.get(f"step.{step_id}.confidence", 0.0),
+    }
     return None
 
 
