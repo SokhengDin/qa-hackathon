@@ -1,20 +1,26 @@
 from github import Auth, Github
 
+from qa_sentinel.config.settings import settings
+
 
 def open_evidence_pr(
-    repo_full_name: str,
-    branch_name   : str,
-    base_branch   : str,
-    pr_title      : str,
-    evidence      : dict,
-    fix_summary   : str,
-    github_token  : str,
+    branch_name: str,
+    base_branch: str,
+    pr_title   : str,
+    evidence   : dict,
+    fix_summary: str,
 ) -> dict:
     """Opens a PR whose description IS the evidence bundle — console line, network
     response, confidence score — not a vague 'fixed a bug' message."""
-    auth = Auth.Token(github_token)
+    if not settings.GITHUB_TOKEN or not settings.GITHUB_REPO:
+        return {
+            "status" : "error",
+            "message": "GITHUB_TOKEN / GITHUB_REPO not configured — cannot open a PR.",
+        }
+
+    auth = Auth.Token(settings.GITHUB_TOKEN)
     gh   = Github(auth=auth)
-    repo = gh.get_repo(repo_full_name)
+    repo = gh.get_repo(settings.GITHUB_REPO)
 
     body = (
         f"## Root cause\n\n"
