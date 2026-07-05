@@ -62,6 +62,19 @@ def inject_repo_url_for_fix(tool, args, tool_context):
     if tool.name not in FIX_DISPATCH_TOOL_NAMES:
         return None
 
+    step_id = tool_context.state.get("current_step_id")
+    already_dispatched = tool_context.state.get(f"step.{step_id}.fix_dispatched")
+    if already_dispatched:
+        return {
+            "status" : "error",
+            "message": (
+                "A fix was already dispatched for this step — do not call this "
+                "again with a different step_id or framing. Use the result you "
+                "already have."
+            ),
+        }
+    tool_context.state[f"step.{step_id}.fix_dispatched"] = True
+
     repo_url = tool_context.state.get("repo_url")
     if not repo_url:
         return {

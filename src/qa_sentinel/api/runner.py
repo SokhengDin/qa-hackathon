@@ -211,7 +211,13 @@ def _summarize_event(event) -> str:
     for fr in event.get_function_responses():
         response = fr.response or {}
         status   = response.get("status")
-        parts.append(f"{fr.name} -> status={status}" if status else f"{fr.name} returned")
+        detail   = response.get("message") or response.get("output_text")
+        if status and detail:
+            parts.append(f"{fr.name} -> status={status} ({detail[:300]})")
+        elif status:
+            parts.append(f"{fr.name} -> status={status}")
+        else:
+            parts.append(f"{fr.name} returned")
 
     content = getattr(event, "content", None)
     if content and content.parts:
