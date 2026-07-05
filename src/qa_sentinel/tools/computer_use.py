@@ -205,8 +205,19 @@ def _sanitize_instruction_urls(instruction: str, real_url: str) -> str:
     literal wrong text still reaches Gemini's own input, and its safety
     classifier reads and blocks on that text directly, independent of what
     actually gets navigated to. Fixing only the Playwright-side navigation
-    does not fix this; the prompt text itself must match reality."""
-    return _URL_RE.sub(real_url, instruction)
+    does not fix this; the prompt text itself must match reality.
+
+    Only the origin (scheme+host+port) is replaced — any path/query the
+    matched URL had is preserved, so 'http://old:3000/product?id=x' becomes
+    'http://real:3005/product?id=x', not a truncated or wrong path."""
+    real_origin = urlparse(real_url).scheme + "://" + urlparse(real_url).netloc
+
+    def _replace(match: re.Match) -> str:
+        parsed = urlparse(match.group(0))
+        rest   = parsed._replace(scheme="", netloc="").geturl()
+        return real_origin + rest
+
+    return _URL_RE.sub(_replace, instruction)
 
 
 def _slugify(text: str, max_words: int = 6) -> str:
