@@ -265,16 +265,6 @@ async def _execute_function_calls(function_calls, page, w, h, allowed_origin: st
         out  = {}
 
         try:
-            if name == "navigate":
-                target_origin = urlparse(args["url"]).scheme + "://" + urlparse(args["url"]).netloc
-                if target_origin != allowed_origin:
-                    out["error"] = (
-                        f"Refused to navigate to '{args['url']}' — outside the allowed "
-                        f"origin '{allowed_origin}' for this test step. Stay on the app "
-                        "under test; do not navigate to any other host or port."
-                    )
-                    results[fc.id] = out
-                    continue
             if name in ("click", "double_click", "triple_click", "middle_click", "right_click", "move", "mouse_down", "mouse_up"):
                 x, y = _denorm_x(args["x"], w), _denorm_y(args["y"], h)
                 if   name == "click":        await page.mouse.click(x, y)
@@ -297,7 +287,16 @@ async def _execute_function_calls(function_calls, page, w, h, allowed_origin: st
                 dy    = delta if args["direction"] == "down"  else (-delta if args["direction"] == "up"   else 0)
                 await page.mouse.move(x, y)
                 await page.mouse.wheel(dx, dy)
-            elif name == "navigate":   await page.goto(args["url"])
+            elif name == "navigate":
+                target_origin = urlparse(args["url"]).scheme + "://" + urlparse(args["url"]).netloc
+                if target_origin != allowed_origin:
+                    out["error"] = (
+                        f"Refused to navigate to '{args['url']}' — outside the allowed "
+                        f"origin '{allowed_origin}' for this test step. Stay on the app "
+                        "under test; do not navigate to any other host or port."
+                    )
+                else:
+                    await page.goto(args["url"])
             elif name == "go_back":    await page.go_back()
             elif name == "go_forward": await page.go_forward()
             elif name == "press_key":  await page.keyboard.press(args["key"])
