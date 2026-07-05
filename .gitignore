@@ -1,0 +1,36 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+.pytest_cache/
+.ruff_cache/
+
+# Virtual environments
+.venv
+
+# Secrets
+.env
+!.env.example
+
+# Evidence artifacts (screenshots, traces) generated at runtime
+evidence/
+*.tar
+
+# Node / npm (demo_target_app/, web/)
+node_modules/
+npm-debug.log*
+
+# Next.js build output (web/)
+web/.next/
+web/out/
+web/next-env.d.ts
+
+# Prisma generated client (web/) — regenerated via `prisma generate`
+web/node_modules/.prisma/
+
+# Editor / local tooling
+.claude/
+.DS_Store

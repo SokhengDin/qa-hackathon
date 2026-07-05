@@ -1,0 +1,60 @@
+services:
+  app:
+    build:
+      context   : .
+      dockerfile: docker/app/Dockerfile
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://qa_sentinel:qa_sentinel@postgres:5432/qa_sentinel
+    depends_on:
+      - postgres
+      - chrome
+    volumes:
+      - ./src:/app/src
+      - ./configs:/app/configs
+
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER    : qa_sentinel
+      POSTGRES_PASSWORD: qa_sentinel
+      POSTGRES_DB      : qa_sentinel
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./configs/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+
+  web:
+    build:
+      context   : ./web
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: postgresql://qa_sentinel:qa_sentinel@postgres:5432/qa_sentinel
+    depends_on:
+      - postgres
+    ports:
+      - "3000:3000"
+
+  chrome:
+    build:
+      context   : .
+      dockerfile: docker/chrome/Dockerfile
+    ports:
+      - "9222:9222"
+    shm_size: "2gb"
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:latest
+    command: ["--config=/etc/otel-collector-config.yaml"]
+    volumes:
+      - ./configs/otel/collector-config.yaml:/etc/otel-collector-config.yaml
+    ports:
+      - "4317:4317"
+      - "4318:4318"
+
+volumes:
+  postgres_data:

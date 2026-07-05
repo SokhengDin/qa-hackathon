@@ -1,0 +1,97 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Run {
+  id             String       @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  appType        String       @map("app_type")
+  appName        String       @map("app_name")
+  baseUrl        String?      @map("base_url")
+  repoUrl        String       @map("repo_url")
+  repoRef        String       @default("main") @map("repo_ref")
+  installCommand String?      @map("install_command")
+  startCommand   String       @map("start_command")
+  port           Int
+  otelEndpoint   String?      @map("otel_endpoint")
+  environmentId  String?      @map("environment_id") @db.Uuid
+  environment    Environment? @relation(fields: [environmentId], references: [id])
+  status         String       @default("queued")
+  createdAt      DateTime     @default(now()) @map("created_at")
+  completedAt    DateTime?    @map("completed_at")
+  steps          Step[]
+  logs           RunLog[]
+
+  @@map("runs")
+}
+
+model Environment {
+  id            String   @id @db.Uuid
+  status        String   @default("active")
+  sourceRepoUrl String?  @map("source_repo_url")
+  createdAt     DateTime @default(now()) @map("created_at")
+  lastActiveAt  DateTime @default(now()) @map("last_active_at")
+  runs          Run[]
+
+  @@map("environments")
+}
+
+model Step {
+  id              String          @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  runId           String          @map("run_id") @db.Uuid
+  run             Run             @relation(fields: [runId], references: [id])
+  stepId          String          @map("step_id")
+  instruction     String
+  dependsOn       String[]        @map("depends_on")
+  expectedOutcome String          @map("expected_outcome")
+  status          String          @default("pending")
+  evidence        Evidence?
+  reviewDecision  ReviewDecision?
+  prUrl           String?         @map("pr_url")
+  createdAt       DateTime        @default(now()) @map("created_at")
+
+  @@unique([runId, stepId])
+  @@map("steps")
+}
+
+model Evidence {
+  id                String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  stepId            String   @unique @map("step_id") @db.Uuid
+  step              Step     @relation(fields: [stepId], references: [id])
+  screenshotPath    String   @map("screenshot_path")
+  consoleErrors     Json     @map("console_errors")
+  networkFailures   Json     @map("network_failures")
+  modelStatedIntent String   @map("model_stated_intent")
+  confidence        Float
+  timestamp         DateTime @default(now())
+
+  @@map("evidence_bundles")
+}
+
+model ReviewDecision {
+  id           String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  stepId       String   @unique @map("step_id") @db.Uuid
+  step         Step     @relation(fields: [stepId], references: [id])
+  decision     String
+  reviewerNote String?  @map("reviewer_note")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@map("review_decisions")
+}
+
+model RunLog {
+  id        String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  runId     String   @map("run_id") @db.Uuid
+  run       Run      @relation(fields: [runId], references: [id])
+  stepId    String?  @map("step_id")
+  source    String
+  eventType String   @map("event_type")
+  payload   Json
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([runId, createdAt])
+  @@map("run_logs")
+}
