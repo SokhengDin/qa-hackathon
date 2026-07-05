@@ -4,6 +4,7 @@ import json
 import re
 from datetime import UTC, datetime
 from pathlib import Path
+from urllib.parse import urlparse
 
 from google import genai
 from google.genai._gaos.lib.compat_errors import BadRequestError
@@ -65,12 +66,13 @@ async def run_ui_test_step(
     screen_width : int = 1440,
     screen_height: int = 900,
 ) -> dict:
-    client        = genai.Client(api_key=settings.GEMINI_API_KEY)
-    actions_taken = []
-    status        = "failed"
-    final_text    = ""
-    turn          = 0
+    client         = genai.Client(api_key=settings.GEMINI_API_KEY)
+    actions_taken  = []
+    status         = "failed"
+    final_text     = ""
+    turn           = 0
     log: list[dict] = []
+    allowed_origin = urlparse(url).scheme + "://" + urlparse(url).netloc
 
     console_errors: list[dict] = []
     network_failures: list[dict] = []
@@ -131,7 +133,7 @@ async def run_ui_test_step(
                 log.append({"category": "safety_response", "turn": turn, "decision": "loop_detected", "explanation": final_text})
                 break
 
-            results = await _execute_function_calls(function_calls, page, screen_width, screen_height)
+            results = await _execute_function_calls(function_calls, page, screen_width, screen_height, allowed_origin)
             for call_id in acknowledge_ids:
                 results.setdefault(call_id, {})["safety_acknowledgement"] = True
 
@@ -254,7 +256,7 @@ def _denorm_y(y: int, h: int) -> int:
     return int(y / 1000 * h)
 
 
-async def _execute_function_calls(function_calls, page, w, h) -> dict:
+async def _execute_function_calls(function_calls, page, w, h, allowed_origin: str) -> dict:
     results = {}
 
     for fc in function_calls:
@@ -263,6 +265,16 @@ async def _execute_function_calls(function_calls, page, w, h) -> dict:
         out  = {}
 
         try:
+            if name == "navigate":
+                target_origin = urlparse(args["url"]).scheme + "://" + urlparse(args["url"]).netloc
+                if target_origin != allowed_origin:
+                    out["error"] = (
+                        f"Refused to navigate to '{args['url']}' — outside the allowed "
+                        f"origin '{allowed_origin}' for this test step. Stay on the app "
+                        "under test; do not navigate to any other host or port."
+                    )
+                    results[fc.id] = out
+                    continue
             if name in ("click", "double_click", "triple_click", "middle_click", "right_click", "move", "mouse_down", "mouse_up"):
                 x, y = _denorm_x(args["x"], w), _denorm_y(args["y"], h)
                 if   name == "click":        await page.mouse.click(x, y)
