@@ -18,7 +18,7 @@ def find_page_id(list_pages_text: str, url_substring: str) -> int | None:
 
 
 async def main() -> None:
-    target_url = sys.argv[1] if len(sys.argv) > 1 else "http://localhost:8009"
+    target_url = sys.argv[1] if len(sys.argv) > 1 else "http://localhost:3005"
 
     server_params = StdioServerParameters(
         command="npx",
@@ -32,31 +32,25 @@ async def main() -> None:
             tools = await session.list_tools()
             print(f"--- available tools: {[t.name for t in tools.tools]} ---")
 
-            pages = await session.call_tool("list_pages", {})
-            print("\n=== list_pages (before anything) ===")
-            for block in pages.content:
-                if block.type == "text":
-                    print(block.text)
-
             print(f"\n--- driving browser to {target_url} via Playwright ---")
             async with async_playwright() as p:
                 browser = await p.chromium.connect_over_cdp(CDP_URL)
                 context = await browser.new_context()
                 page    = await context.new_page()
 
-                await page.goto(target_url)
-                await page.click('a[href^="/product/"]')
+                await page.goto(f"{target_url}/product.html?id=ceramic-mug")
                 await page.click('button[data-testid="add-to-cart"]')
                 await page.wait_for_load_state()
                 await page.click('a[data-testid="cart-link"]')
                 await page.wait_for_load_state()
 
+                print(f"--- page url before checkout click: {page.url} ---")
                 print("--- clicking checkout ---")
-                async with page.expect_response(lambda r: "/checkout" in r.url) as resp_info:
+                async with page.expect_response(lambda r: "/api/checkout" in r.url) as resp_info:
                     await page.click('button[data-testid="checkout"]')
                 response = await resp_info.value
                 print(f"--- checkout response status: {response.status} ---")
-                await page.wait_for_load_state()
+                print(f"--- page url after checkout click: {page.url} ---")
 
                 pages2 = await session.call_tool("list_pages", {})
                 pages2_text = ""
@@ -66,8 +60,8 @@ async def main() -> None:
                         print(block.text)
                         pages2_text = block.text
 
-                page_id = find_page_id(pages2_text, "/checkout")
-                print(f"\n--- resolved page_id for /checkout: {page_id} ---")
+                page_id = find_page_id(pages2_text, "/cart.html")
+                print(f"\n--- resolved page_id for /cart.html: {page_id} ---")
 
                 print(f"\n=== calling select_page(pageId={page_id}) ===")
                 select_result = await session.call_tool("select_page", {"pageId": page_id})
@@ -76,14 +70,14 @@ async def main() -> None:
                     if block.type == "text":
                         print(block.text)
 
-                print("\n=== calling list_network_requests (same session, after select_page) ===")
+                print("\n=== calling list_network_requests (immediately after select_page) ===")
                 result = await session.call_tool("list_network_requests", {})
                 print("isError:", result.isError)
                 for block in result.content:
                     if block.type == "text":
                         print(block.text)
 
-                print("\n=== calling list_console_messages (same session, after nav) ===")
+                print("\n=== calling list_console_messages ===")
                 result2 = await session.call_tool("list_console_messages", {})
                 print("isError:", result2.isError)
                 for block in result2.content:

@@ -1,27 +1,10 @@
 from google.adk.agents import LlmAgent
 
-from qa_sentinel.callbacks.evidence_capture import (
-    capture_error_evidence,
-    capture_list_pages,
-    evidence_escalation_trigger,
-    resolve_target_page,
-)
+from qa_sentinel.callbacks.evidence_capture import evidence_escalation_trigger
 from qa_sentinel.callbacks.feature_gate     import feature_gate
 from qa_sentinel.callbacks.safety_guard     import guard_run_ui_test_step
 from qa_sentinel.callbacks.step_verdict     import compute_step_verdict
-from qa_sentinel.tools.chrome_devtools_mcp  import build_chrome_devtools_toolset
 from qa_sentinel.tools.computer_use         import run_ui_test_step
-from qa_sentinel.tools.shared_chromium      import CDP_URL
-
-chrome_devtools = build_chrome_devtools_toolset(cdp_url=CDP_URL)
-
-
-def _after_tool(tool, args, tool_context, tool_response):
-    tool_response = evidence_escalation_trigger(tool, args, tool_context, tool_response)
-    tool_response = capture_list_pages(tool, args, tool_context, tool_response)
-    tool_response = capture_error_evidence(tool, args, tool_context, tool_response)
-    return tool_response
-
 
 test_runner_agent = LlmAgent(
     name        = "TestRunner",
@@ -45,53 +28,27 @@ test_runner_agent = LlmAgent(
         "been misread as a local security probe and blocked outright. Never "
         "repeat the raw URL back in the instruction text; just describe what "
         "the current page is and what to check for.\n\n"
-        "Be efficient inside run_ui_test_step: perform each required action "
-        "exactly once, in the order given, then wait briefly and check the "
-        "result. Do not repeat an action that already succeeded, do not "
-        "re-navigate to a page you're already on, and do not retry a "
-        "submission that already went through — this wastes turns and can "
-        "trigger duplicate side effects (e.g. a second signup for the same "
-        "email). If the first attempt's outcome is unclear, take one more "
-        "screenshot to check — do not restart the whole sequence from the "
-        "beginning.\n\n"
-        "Call run_ui_test_step AT MOST ONCE per step, no matter what. Never "
+        "Call run_ui_test_step EXACTLY ONCE per step, no matter what. Never "
         "call it a second time to 'double check' or verify with a simpler "
-        "instruction — a second call will be blocked and wastes turns. Once "
-        "it returns, use chrome-devtools (list_pages, select_page, "
-        "list_console_messages, list_network_requests) to investigate that "
-        "SAME result further; do not re-run the UI action to get more "
-        "information.\n\n"
-        "After each step, compare the resulting screenshot/state against the "
-        "expected outcome in the test criteria.\n\n"
-        "Regardless of whether the screenshot looked correct: after every "
-        "run_ui_test_step call, needs_chrome_devtools_check is always set in "
-        "state — you MUST run this exact 3-step sequence before deciding this "
-        "step's final status:\n"
-        "  1. Call list_pages.\n"
-        "  2. Call select_page once (the correct page id is resolved for you "
-        "automatically — the exact argument value you pass does not matter, "
-        "just call it so the right page gets selected).\n"
-        "  3. Only after select_page returns, call list_console_messages and "
-        "list_network_requests. Calling them before select_page will silently "
-        "return empty results even when real errors exist.\n\n"
-        "A screenshot only shows what rendered; it cannot show a server-side "
-        "failure (e.g. a 403 or 500) that the page displays no visible error "
-        "for. If list_console_messages or list_network_requests reveal a "
-        "console error or a network response with status >= 400 for this "
-        "step's action, the step FAILED even if run_ui_test_step itself "
-        "reported passed and the screenshot looked fine — trust the network/"
-        "console evidence over the visual read every time they disagree.\n\n"
-        "IF the outcome matches expectations AND no console/network errors "
-        "were found: mark the step passed.\n\n"
-        "IF the outcome does not match, OR the screenshot looked fine but "
-        "console/network evidence shows a real error: mark the step failed. "
-        "Never report a failure without this evidence attached. A failure "
-        "report with no console/network evidence is incomplete and must be "
-        "flagged as low-confidence rather than a resolved bug."
+        "instruction — a second call will be blocked and wastes turns. "
+        "Inside run_ui_test_step, perform each required action exactly once, "
+        "in the order given, then wait briefly and check the result. Do not "
+        "repeat an action that already succeeded, do not re-navigate to a "
+        "page you're already on, and do not retry a submission that already "
+        "went through.\n\n"
+        "run_ui_test_step automatically captures real console errors and "
+        "failed (status >= 400) network responses while it drives the page — "
+        "you do not need to call any other tool to check for these; they are "
+        "already recorded. After run_ui_test_step returns, just summarize "
+        "what happened: compare the final screenshot/state against the "
+        "expected outcome in the test criteria, and state clearly whether it "
+        "matched. A screenshot only shows what rendered; it cannot show a "
+        "server-side failure the page displays no visible error for — if you "
+        "have any doubt, say so plainly rather than guessing."
     ),
-    tools                 = [run_ui_test_step, chrome_devtools],
+    tools                 = [run_ui_test_step],
     before_agent_callback = feature_gate,
-    before_tool_callback  = [guard_run_ui_test_step, resolve_target_page],
-    after_tool_callback   = _after_tool,
+    before_tool_callback  = guard_run_ui_test_step,
+    after_tool_callback   = evidence_escalation_trigger,
     after_agent_callback  = compute_step_verdict,
 )

@@ -69,10 +69,14 @@ async def run_ui_test_step(
     turn          = 0
     log: list[dict] = []
 
+    console_errors: list[dict] = []
+    network_failures: list[dict] = []
+
     async with async_playwright() as p:
         browser = await p.chromium.connect_over_cdp(shared_chromium.CDP_URL)
         context = await browser.new_context(viewport={"width": screen_width, "height": screen_height})
         page    = await context.new_page()
+        _attach_evidence_listeners(page, console_errors, network_failures)
         await page.goto(url)
 
         screenshot_bytes = await page.screenshot(type="png")
@@ -166,13 +170,33 @@ async def run_ui_test_step(
         await context.close()
 
     return {
-        "status"         : status,
-        "screenshot_path": screenshot_path,
-        "final_url"      : final_url,
-        "actions_taken"  : actions_taken,
-        "final_text"     : final_text,
-        "log"            : log,
+        "status"          : status,
+        "screenshot_path" : screenshot_path,
+        "final_url"       : final_url,
+        "actions_taken"   : actions_taken,
+        "final_text"      : final_text,
+        "log"             : log,
+        "console_errors"  : console_errors,
+        "network_failures": network_failures,
     }
+
+
+def _attach_evidence_listeners(page, console_errors: list[dict], network_failures: list[dict]) -> None:
+    def on_console(msg) -> None:
+        if msg.type == "error":
+            console_errors.append({"level": "error", "text": msg.text, "url": page.url})
+
+    def on_response(response) -> None:
+        if response.status >= 400:
+            network_failures.append({
+                "url"   : response.url,
+                "status": response.status,
+                "method": response.request.method,
+            })
+
+    page.on("console", on_console)
+    page.on("response", on_response)
+    page.on("pageerror", lambda exc: console_errors.append({"level": "error", "text": str(exc), "url": page.url}))
 
 
 def _handle_input_blocked(log: list[dict], turn: int, exc: Exception) -> tuple[str, str]:
