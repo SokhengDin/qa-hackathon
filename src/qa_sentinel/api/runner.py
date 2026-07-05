@@ -16,38 +16,46 @@ APP_NAME = "qa_sentinel_pipeline"
 
 
 async def execute_run(store: SessionStore, run_id: UUID, claimed: dict) -> None:
-    logger.info("[run %s] provisioning sandbox for repo_url=%s port=%s",
-                run_id, claimed["repo_url"], claimed["port"])
-    await store.log_event(
-        run_id, "test_runner", "status_change",
-        {"repo_url": claimed["repo_url"], "port": claimed["port"], "status": "provisioning"},
-    )
-
-    try:
-        provisioned = provision_and_boot_app(
-            repo_url        = claimed["repo_url"],
-            port            = claimed["port"],
-            start_command   = claimed["start_command"],
-            repo_ref        = claimed["repo_ref"],
-            install_command = claimed["install_command"],
+    if claimed["local"]:
+        logger.info("[run %s] local mode, skipping sandbox provisioning", run_id)
+        await store.log_event(
+            run_id, "test_runner", "status_change",
+            {"status": "local_mode", "base_url": claimed["base_url"]},
         )
-    except Exception as exc:
-        logger.exception("[run %s] provisioning raised", run_id)
-        await store.log_event(run_id, "test_runner", "status_change", {"error": str(exc)})
-        await store.set_run_status(run_id, "failed")
-        return
+        base_url = claimed["base_url"]
+    else:
+        logger.info("[run %s] provisioning sandbox for repo_url=%s port=%s",
+                    run_id, claimed["repo_url"], claimed["port"])
+        await store.log_event(
+            run_id, "test_runner", "status_change",
+            {"repo_url": claimed["repo_url"], "port": claimed["port"], "status": "provisioning"},
+        )
 
-    logger.info("[run %s] provisioning result: %s", run_id, provisioned["status"])
+        try:
+            provisioned = provision_and_boot_app(
+                repo_url        = claimed["repo_url"],
+                port            = claimed["port"],
+                start_command   = claimed["start_command"],
+                repo_ref        = claimed["repo_ref"],
+                install_command = claimed["install_command"],
+            )
+        except Exception as exc:
+            logger.exception("[run %s] provisioning raised", run_id)
+            await store.log_event(run_id, "test_runner", "status_change", {"error": str(exc)})
+            await store.set_run_status(run_id, "failed")
+            return
 
-    if provisioned["status"] != "ready":
-        await store.log_event(run_id, "test_runner", "status_change", provisioned)
-        await store.set_run_status(run_id, "failed")
-        return
+        logger.info("[run %s] provisioning result: %s", run_id, provisioned["status"])
 
-    await store.set_run_environment(run_id, provisioned["environment_id"])
-    logger.info("[run %s] environment ready: %s", run_id, provisioned["environment_id"])
+        if provisioned["status"] != "ready":
+            await store.log_event(run_id, "test_runner", "status_change", provisioned)
+            await store.set_run_status(run_id, "failed")
+            return
 
-    base_url = f"http://localhost:{claimed['port']}"
+        await store.set_run_environment(run_id, provisioned["environment_id"])
+        logger.info("[run %s] environment ready: %s", run_id, provisioned["environment_id"])
+
+        base_url = f"http://localhost:{claimed['port']}"
 
     criteria = TestCriteria(
         app_name = claimed["app_name"],

@@ -37,23 +37,8 @@ async def create_and_start_run(
     otel_endpoint    : str | None = Form(None),
     app_type         : Literal["webapp"] = Form("webapp"),
     environment_id   : str | None = Form(None),
+    local            : bool = Form(False),
 ) -> dict:
-    """The single write path for kicking off a pipeline run — owned entirely
-    by the Python side. web/ (the dashboard) is read-only plus the single
-    review-decision action; it never creates Run/Step rows itself. Called via
-    curl/CI/a script, not a dashboard button, per tasks/task_1.md §0.
-
-    Any public repo_url + a test_criteria.md is enough to test any app — this
-    endpoint is not tied to a fixed demo app. sandbox_provision.py (called from
-    runner.py once this run is claimed) clones repo_url, boots it with
-    start_command on port, and Computer Use tests it from inside that same
-    sandbox. See tasks/task_3.md.
-
-    test_criteria is an uploaded .md file (see configs/test_criteria/example_app.md);
-    its own frontmatter supplies app_name and base_url, so those aren't passed
-    as separate form fields. start_command/port are required, not inferred —
-    per tasks/task_3.md §2, guessing how an arbitrary repo boots itself is a
-    real source of provisioning hangs."""
     raw = await test_criteria.read()
     try:
         criteria = parse_test_criteria_md(raw.decode("utf-8"))
@@ -72,6 +57,7 @@ async def create_and_start_run(
         otel_endpoint   = otel_endpoint,
         steps           = [s.model_dump() for s in criteria.steps],
         environment_id  = environment_id,
+        local           = local,
     )
 
     claimed = await store.claim_run(run_id)

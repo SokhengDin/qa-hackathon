@@ -16,6 +16,7 @@ model Run {
   installCommand String?      @map("install_command")
   startCommand   String       @map("start_command")
   port           Int
+  local          Boolean      @default(false)
   otelEndpoint   String?      @map("otel_endpoint")
   environmentId  String?      @map("environment_id") @db.Uuid
   environment    Environment? @relation(fields: [environmentId], references: [id])

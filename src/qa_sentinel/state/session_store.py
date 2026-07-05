@@ -35,23 +35,16 @@ class SessionStore:
         install_command: str | None = None,
         otel_endpoint  : str | None = None,
         environment_id : str | None = None,
+        local          : bool = False,
     ) -> UUID:
-        """Creates a Run row plus one Step row per test step, status 'queued'.
-        This is the write path the FastAPI runner owns (POST /api/agent/runs) —
-        the dashboard in web/ never creates rows, only reads and records review
-        decisions, per tasks/task_1.md §0. start_command/port are required per
-        tasks/task_3.md §2 — no safe default, since guessing how an arbitrary
-        repo boots itself is a real source of provisioning hangs. otel_endpoint
-        is per-run, not global config — concurrent runs may report to different
-        collectors, so it's never hardcoded in settings.py."""
         async with self._pool.acquire() as conn:
             async with conn.transaction():
                 run_id = await conn.fetchval(
                     """
                     INSERT INTO runs
                         (app_type, app_name, base_url, repo_url, repo_ref, install_command,
-                         start_command, port, otel_endpoint, environment_id, status)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'queued')
+                         start_command, port, otel_endpoint, environment_id, local, status)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'queued')
                     RETURNING id
                     """,
                     app_type,
@@ -64,6 +57,7 @@ class SessionStore:
                     port,
                     otel_endpoint,
                     environment_id,
+                    local,
                 )
 
                 for step in steps:
@@ -83,25 +77,16 @@ class SessionStore:
         return run_id
 
     async def claim_next_queued_run(self) -> dict | None:
-        """Atomically picks up the oldest run with status='queued', flips it to
-        'running', and returns its id + steps. Returns None if no run is queued.
-        Kept for a future generic polling worker; the FastAPI push path (see
-        api/app.py) uses claim_run(run_id) instead to target a specific run."""
         return await self._claim(
             "SELECT id, app_type, app_name, base_url, repo_url, repo_ref, install_command, "
-            "start_command, port, otel_endpoint, environment_id "
+            "start_command, port, otel_endpoint, environment_id, local "
             "FROM runs WHERE status = 'queued' ORDER BY created_at LIMIT 1 FOR UPDATE SKIP LOCKED"
         )
 
     async def claim_run(self, run_id: UUID) -> dict | None:
-        """Atomically claims one specific run by id, iff it is still 'queued'.
-        Returns None if the run doesn't exist or was already claimed — the
-        caller (POST /api/agent/runs) treats that as a 500 (see api/app.py:
-        the run was just created in the same request, so a None here means
-        something raced it)."""
         return await self._claim(
             "SELECT id, app_type, app_name, base_url, repo_url, repo_ref, install_command, "
-            "start_command, port, otel_endpoint, environment_id "
+            "start_command, port, otel_endpoint, environment_id, local "
             "FROM runs WHERE id = $1 AND status = 'queued' FOR UPDATE SKIP LOCKED",
             run_id,
         )
@@ -137,6 +122,7 @@ class SessionStore:
             "port"           : row["port"],
             "otel_endpoint"  : row["otel_endpoint"],
             "environment_id" : row["environment_id"],
+            "local"          : row["local"],
             "steps"          : [dict(s) for s in steps],
         }
 
