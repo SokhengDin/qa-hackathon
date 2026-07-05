@@ -55,7 +55,17 @@ async def main() -> None:
                     if block.type == "text":
                         print(block.text)
 
-                print("\n=== calling list_network_requests (same session, after nav) ===")
+                print("\n=== calling select_page(pageIdx=6) ===")
+                select_tools = [t for t in tools.tools if t.name == "select_page"]
+                if select_tools:
+                    print("select_page inputSchema:", select_tools[0].inputSchema)
+                select_result = await session.call_tool("select_page", {"pageIdx": 6})
+                print("isError:", select_result.isError)
+                for block in select_result.content:
+                    if block.type == "text":
+                        print(block.text)
+
+                print("\n=== calling list_network_requests (same session, after select_page) ===")
                 result = await session.call_tool("list_network_requests", {})
                 print("isError:", result.isError)
                 for block in result.content:
