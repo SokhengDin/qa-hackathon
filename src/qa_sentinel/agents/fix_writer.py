@@ -1,5 +1,6 @@
 from google.adk.agents import LlmAgent
 
+from qa_sentinel.callbacks.evidence_capture import capture_antigravity_handoff
 from qa_sentinel.tools.antigravity import dispatch_fix_to_antigravity
 
 fix_writer_agent = LlmAgent(
@@ -13,5 +14,6 @@ fix_writer_agent = LlmAgent(
         "for prior features in this run, so file state persists across the whole "
         "test session."
     ),
-    tools = [dispatch_fix_to_antigravity],
+    tools               = [dispatch_fix_to_antigravity],
+    after_tool_callback = capture_antigravity_handoff,
 )

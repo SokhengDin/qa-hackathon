@@ -2,6 +2,7 @@ from google import genai
 from google.adk.agents import LlmAgent
 from google.adk.tools import FunctionTool
 
+from qa_sentinel.callbacks.evidence_capture import inject_antigravity_ids
 from qa_sentinel.config.settings import settings
 
 AGENT = "antigravity-preview-05-2026"
@@ -43,5 +44,6 @@ verifier_agent = LlmAgent(
         "feature 'fixed_and_verified'. Never trust FixWriter's own claim without "
         "this independent re-check."
     ),
-    tools = [FunctionTool(func=verify_fix)],
+    tools                = [FunctionTool(func=verify_fix)],
+    before_tool_callback = inject_antigravity_ids,
 )

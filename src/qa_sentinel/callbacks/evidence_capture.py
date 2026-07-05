@@ -44,3 +44,40 @@ def capture_error_evidence(tool, args, tool_context, tool_response):
         tool_context.state[f"evidence.{step_id}.snapshot"] = text
 
     return tool_response
+
+
+def capture_antigravity_handoff(tool, args, tool_context, tool_response):
+    if tool.name != "dispatch_fix_to_antigravity":
+        return tool_response
+
+    environment_id = tool_response.get("environment_id")
+    interaction_id = tool_response.get("interaction_id")
+
+    if environment_id:
+        tool_context.state["antigravity.environment_id"] = environment_id
+    if interaction_id:
+        tool_context.state["antigravity.previous_interaction_id"] = interaction_id
+
+    return tool_response
+
+
+def inject_antigravity_ids(tool, args, tool_context):
+    if tool.name != "verify_fix":
+        return None
+
+    environment_id = tool_context.state.get("antigravity.environment_id")
+    interaction_id = tool_context.state.get("antigravity.previous_interaction_id")
+
+    if not environment_id or not interaction_id:
+        return {
+            "status"     : "error",
+            "output_text": (
+                "No FixWriter environment/interaction found in state — cannot verify "
+                "a fix that was never dispatched to Antigravity. Skipping verification."
+            ),
+        }
+
+    args["environment_id"] = environment_id
+    args["previous_interaction_id"] = interaction_id
+
+    return None
