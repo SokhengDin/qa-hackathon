@@ -84,8 +84,15 @@ async def run_ui_test_step(
         _attach_evidence_listeners(page, console_errors, network_failures)
         await page.goto(url)
 
+        sanitized_instruction = _sanitize_instruction_urls(instruction, url)
+
         screenshot_bytes = await page.screenshot(type="png")
-        log.append({"category": "prompt", "instruction": instruction, "url": url})
+        log.append({
+            "category"   : "prompt",
+            "instruction": sanitized_instruction,
+            "raw_instruction": instruction,
+            "url"        : url,
+        })
         log.append({"category": "screenshot", "turn": 0, "url": page.url})
 
         try:
@@ -93,7 +100,7 @@ async def run_ui_test_step(
                 model              = MODEL,
                 system_instruction = SYSTEM_INSTRUCTION,
                 input = [
-                    {"type": "text",  "text": instruction},
+                    {"type": "text",  "text": sanitized_instruction},
                     {"type": "image", "data": base64.b64encode(screenshot_bytes).decode("utf-8"),
                      "mime_type": "image/png"},
                 ],
@@ -184,6 +191,22 @@ async def run_ui_test_step(
         "console_errors"  : console_errors,
         "network_failures": network_failures,
     }
+
+
+_URL_RE = re.compile(r"https?://[^\s'\"<>]+")
+
+
+def _sanitize_instruction_urls(instruction: str, real_url: str) -> str:
+    """Rewrites any http(s) URL mentioned in the instruction text to the real
+    url this step actually navigates to. TestRunner has been observed
+    hallucinating a plausible-but-wrong port in its instruction wording (e.g.
+    localhost:3000 instead of the real localhost:3005) — even though
+    Playwright itself only ever navigates to the real `url` parameter, the
+    literal wrong text still reaches Gemini's own input, and its safety
+    classifier reads and blocks on that text directly, independent of what
+    actually gets navigated to. Fixing only the Playwright-side navigation
+    does not fix this; the prompt text itself must match reality."""
+    return _URL_RE.sub(real_url, instruction)
 
 
 def _slugify(text: str, max_words: int = 6) -> str:
