@@ -187,7 +187,7 @@ def _attach_evidence_listeners(page, console_errors: list[dict], network_failure
             console_errors.append({"level": "error", "text": msg.text, "url": page.url})
 
     def on_response(response) -> None:
-        if response.status >= 400:
+        if response.status >= 400 and not response.url.endswith("/favicon.ico"):
             network_failures.append({
                 "url"   : response.url,
                 "status": response.status,
