@@ -41,11 +41,17 @@ def _authenticated_clone_url(repo_url: str) -> str:
     return repo_url.replace("https://github.com/", f"https://{settings.GITHUB_TOKEN}@github.com/")
 
 
+def _default_branch(workdir: Path) -> str:
+    ref = _run_git(["symbolic-ref", "refs/remotes/origin/HEAD"], cwd=workdir)
+    return ref.rsplit("/", 1)[-1]
+
+
 def _clone_or_reuse(repo_url: str, workdir: Path) -> None:
     if workdir.exists() and (workdir / ".git").exists():
         _run_git(["fetch", "origin"], cwd=workdir)
-        _run_git(["checkout", "main"], cwd=workdir)
-        _run_git(["reset", "--hard", "origin/main"], cwd=workdir)
+        default_branch = _default_branch(workdir)
+        _run_git(["checkout", default_branch], cwd=workdir)
+        _run_git(["reset", "--hard", f"origin/{default_branch}"], cwd=workdir)
         return
 
     workdir.parent.mkdir(parents=True, exist_ok=True)
@@ -134,11 +140,14 @@ def dispatch_fix_locally(evidence: dict, repo_url: str, app_subpath: str = "") -
     target_file.write_text(fix["content"])
 
     try:
-        _run_git(["checkout", "-b", branch_name], cwd=workdir)
+        try:
+            _run_git(["checkout", "-b", branch_name], cwd=workdir)
+        except subprocess.CalledProcessError:
+            _run_git(["checkout", branch_name], cwd=workdir)
         _run_git(["add", "-A"], cwd=workdir)
         _run_git(["-c", "user.email=qa-sentinel@local", "-c", "user.name=QA Sentinel",
                   "commit", "-m", f"Fix: {step_id}"], cwd=workdir)
-        _run_git(["push", "origin", branch_name], cwd=workdir)
+        _run_git(["push", "--force", "origin", branch_name], cwd=workdir)
     except subprocess.CalledProcessError as exc:
         return {"status": "error", "message": f"git commit/push failed: {exc.stderr}"}
 
