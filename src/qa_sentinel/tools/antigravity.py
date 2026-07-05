@@ -8,11 +8,11 @@ from qa_sentinel.config.settings import settings
 AGENT = "antigravity-preview-05-2026"
 
 
-def _github_push_credential_header() -> dict | None:
+def _github_push_credential_header() -> list[dict] | None:
     if not settings.GITHUB_TOKEN:
         return None
     encoded = base64.b64encode(f"x-oauth-basic:{settings.GITHUB_TOKEN}".encode()).decode()
-    return {"Authorization": f"Basic {encoded}"}
+    return [{"Authorization": f"Basic {encoded}"}]
 
 
 def dispatch_fix_to_antigravity(
