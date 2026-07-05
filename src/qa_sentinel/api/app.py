@@ -57,14 +57,19 @@ async def create_and_start_run(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=f"invalid test_criteria .md: {exc}") from exc
 
-    if not local and (start_command is None or port is None):
+    if start_command is None:
         raise HTTPException(
             status_code=400,
-            detail="start_command and port are required unless local=true",
+            detail=(
+                "start_command is required — FixerAgent needs it to restart the "
+                "live app after pushing a fix, even in local=true mode."
+            ),
         )
+    if not local and port is None:
+        raise HTTPException(status_code=400, detail="port is required unless local=true")
 
     resolved_port = port if port is not None else _port_from_base_url(criteria.base_url)
-    resolved_start_command = start_command or "none"
+    resolved_start_command = start_command
 
     run_id = await store.create_run(
         app_type        = app_type,

@@ -132,6 +132,73 @@ def inject_repo_full_name(tool, args, tool_context):
     return None
 
 
+FIXER_TOOL_NAMES = (
+    "clone_or_reset_repo",
+    "read_file",
+    "write_file",
+    "run_shell_command",
+    "git_commit_and_push",
+    "restart_live_app",
+)
+
+
+def inject_fixer_args(tool, args, tool_context):
+    """FixerAgent's tools all need the real repo_url/port/start_command for
+    this run — never something the LLM guesses. git_commit_and_push also
+    gets the real step_id (for its branch name) and is blocked entirely if a
+    fix was already dispatched for this step, so FixerAgent cannot push a
+    second, possibly-conflicting fix after already succeeding once."""
+    if tool.name not in FIXER_TOOL_NAMES:
+        return None
+
+    repo_url = tool_context.state.get("repo_url")
+    if not repo_url:
+        return {
+            "status" : "error",
+            "message": "repo_url not found in state — cannot operate without a resolved target repo.",
+        }
+    args["repo_url"] = repo_url
+
+    if tool.name in ("clone_or_reset_repo", "read_file", "write_file", "run_shell_command"):
+        return None
+
+    if tool.name == "restart_live_app":
+        args["port"] = tool_context.state.get("port")
+        args["start_command"] = tool_context.state.get("start_command")
+        return None
+
+    if tool.name == "git_commit_and_push":
+        step_id = tool_context.state.get("current_step_id")
+        already_dispatched = tool_context.state.get(f"step.{step_id}.fix_dispatched")
+        if already_dispatched:
+            return {
+                "status" : "error",
+                "message": "A fix was already committed and pushed for this step — do not push again.",
+            }
+        tool_context.state[f"step.{step_id}.fix_dispatched"] = True
+        args["step_id"] = step_id
+
+    return None
+
+
+def capture_fixer_handoff(tool, args, tool_context, tool_response):
+    """Captures the pushed branch_name from git_commit_and_push, and
+    increments this step's fix_attempts counter so compute_step_verdict knows
+    a loop-back re-test is underway (and can cap retries)."""
+    if tool.name != "git_commit_and_push":
+        return tool_response
+
+    step_id = tool_context.state.get("current_step_id")
+    attempts = tool_context.state.get(f"step.{step_id}.fix_attempts", 0)
+    tool_context.state[f"step.{step_id}.fix_attempts"] = attempts + 1
+
+    branch_name = tool_response.get("branch_name")
+    if branch_name:
+        tool_context.state["antigravity.branch_name"] = branch_name
+
+    return tool_response
+
+
 def inject_verify_fix_args(tool, args, tool_context):
     if tool.name != "verify_fix":
         return None
