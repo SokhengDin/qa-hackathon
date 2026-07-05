@@ -1,6 +1,10 @@
 from google.adk.agents import LlmAgent
 
-from qa_sentinel.callbacks.evidence_capture import capture_error_evidence, evidence_escalation_trigger
+from qa_sentinel.callbacks.evidence_capture import (
+    capture_error_evidence,
+    evidence_escalation_trigger,
+    require_page_selected_first,
+)
 from qa_sentinel.callbacks.feature_gate     import feature_gate
 from qa_sentinel.callbacks.safety_guard     import guard_run_ui_test_step
 from qa_sentinel.callbacks.step_verdict     import compute_step_verdict
@@ -52,12 +56,23 @@ test_runner_agent = LlmAgent(
         "expected outcome in the test criteria.\n\n"
         "Regardless of whether the screenshot looked correct: after every "
         "run_ui_test_step call, needs_chrome_devtools_check is always set in "
-        "state — always call list_console_messages and list_network_requests "
-        "before deciding this step's final status. A screenshot only shows "
-        "what rendered; it cannot show a server-side failure (e.g. a 403 or "
-        "500) that the page displays no visible error for. If those tools "
-        "reveal a console error or a network response with status >= 400 for "
-        "this step's action, the step FAILED even if run_ui_test_step itself "
+        "state — you MUST run this exact 3-step sequence before deciding this "
+        "step's final status:\n"
+        "  1. Call list_pages. It lists every open browser tab/page with an "
+        "index and URL, and marks which one is currently [selected].\n"
+        "  2. Find the page whose URL matches the page run_ui_test_step just "
+        "acted on (check the URL run_ui_test_step reported). Call select_page "
+        "with that page's id — chrome-devtools-mcp reports data for whichever "
+        "page is selected, which is often a stale blank tab, NOT the page "
+        "Computer Use just used, until you explicitly select it.\n"
+        "  3. Only after select_page succeeds, call list_console_messages and "
+        "list_network_requests. Calling them before selecting the right page "
+        "will silently return empty results even when real errors exist.\n\n"
+        "A screenshot only shows what rendered; it cannot show a server-side "
+        "failure (e.g. a 403 or 500) that the page displays no visible error "
+        "for. If list_console_messages or list_network_requests reveal a "
+        "console error or a network response with status >= 400 for this "
+        "step's action, the step FAILED even if run_ui_test_step itself "
         "reported passed and the screenshot looked fine — trust the network/"
         "console evidence over the visual read every time they disagree.\n\n"
         "IF the outcome matches expectations AND no console/network errors "
@@ -70,7 +85,7 @@ test_runner_agent = LlmAgent(
     ),
     tools                 = [run_ui_test_step, chrome_devtools],
     before_agent_callback = feature_gate,
-    before_tool_callback  = guard_run_ui_test_step,
+    before_tool_callback  = [guard_run_ui_test_step, require_page_selected_first],
     after_tool_callback   = _after_tool,
     after_agent_callback  = compute_step_verdict,
 )

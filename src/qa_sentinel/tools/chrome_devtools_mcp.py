@@ -17,6 +17,8 @@ def build_chrome_devtools_toolset(cdp_url: str = "http://127.0.0.1:9222") -> Mcp
             ),
         ),
         tool_filter = [
+            "list_pages",
+            "select_page",
             "list_console_messages",
             "list_network_requests",
             "take_snapshot",

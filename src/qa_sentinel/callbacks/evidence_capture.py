@@ -8,12 +8,45 @@ def evidence_escalation_trigger(tool, args, tool_context, tool_response):
     can catch what a screenshot cannot."""
     if tool.name == "run_ui_test_step":
         tool_context.state["needs_chrome_devtools_check"] = True
+        tool_context.state["chrome_devtools_page_selected"] = False
 
         step_id = tool_context.state.get("current_step_id")
         tool_context.state[f"evidence.{step_id}.run_status"] = tool_response.get("status", "failed")
         tool_context.state[f"evidence.{step_id}.intent"]     = tool_response.get("final_text", "")
 
     return tool_response
+
+
+def require_page_selected_first(tool, args, tool_context):
+    """Deterministic before_tool_callback: chrome-devtools-mcp reports
+    console/network data for whichever page is currently [selected] in its
+    own list_pages output — which defaults to a stale blank tab, NOT the page
+    Computer Use just acted on. Calling list_console_messages/
+    list_network_requests before select_page silently returns empty results
+    even when real errors exist (confirmed live via scripts/
+    probe_chrome_devtools_mcp.py). Block those two calls until select_page
+    has actually succeeded for this step, rather than trusting the LLM to
+    remember the required ordering every time."""
+    if tool.name == "select_page":
+        tool_context.state["chrome_devtools_page_selected"] = True
+        return None
+
+    if tool.name in ("list_console_messages", "list_network_requests"):
+        if not tool_context.state.get("chrome_devtools_page_selected"):
+            return {
+                "content": [{
+                    "type": "text",
+                    "text": (
+                        "Blocked: call list_pages and select_page (matching the URL "
+                        "run_ui_test_step just acted on) before calling this tool. "
+                        "Otherwise this returns empty results for a stale, unselected "
+                        "page instead of the page under test."
+                    ),
+                }],
+                "isError": True,
+            }
+
+    return None
 
 
 def _extract_text(tool_response: dict) -> str:
