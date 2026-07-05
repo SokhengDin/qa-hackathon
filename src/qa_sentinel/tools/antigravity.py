@@ -10,6 +10,7 @@ AGENT = "antigravity-preview-05-2026"
 def dispatch_fix_to_antigravity(
     evidence: dict,
     repo_url: str,
+    app_subpath: str = "demo_target_app",
     environment_id: str | None = None,
     previous_interaction_id: str | None = None,
 ) -> dict:
@@ -20,6 +21,9 @@ def dispatch_fix_to_antigravity(
     Args:
         evidence: An EvidenceBundle, serialized to dict.
         repo_url: The target app's git repository.
+        app_subpath: Path within the repo where the target app actually lives,
+            e.g. "demo_target_app" for a monorepo. Empty string means the app
+            is at the repo root.
         environment_id: Reuse an existing sandbox if provided; else provision fresh.
         previous_interaction_id: Chain onto a prior interaction for multi-turn state.
 
@@ -40,14 +44,19 @@ def dispatch_fix_to_antigravity(
     }
 
     branch_name = f"qa-sentinel/fix-{evidence['step_id']}"
+    app_dir     = f"/workspace/app/{app_subpath}".rstrip("/") if app_subpath else "/workspace/app"
 
     prompt = (
         f"A UI test failed at step '{evidence['step_id']}'.\n"
         f"Console errors: {evidence['console_errors']}\n"
         f"Network failures: {evidence['network_failures']}\n"
         f"Model's stated intent when the failure occurred: {evidence['model_stated_intent']}\n\n"
-        "Diagnose the root cause using this evidence and write a fix in /workspace/app.\n\n"
-        "Then, inside /workspace/app, run exactly these git steps yourself:\n"
+        f"The repository is cloned at /workspace/app. The target app's own code "
+        f"lives at {app_dir} — only edit files under that path, do not touch "
+        f"other directories in this repo.\n\n"
+        f"Diagnose the root cause using this evidence and write a fix under {app_dir}.\n\n"
+        "Then, from /workspace/app (the repository root — git commands must run "
+        "here, not inside the app subdirectory), run exactly these git steps yourself:\n"
         f"1. git checkout -b {branch_name}\n"
         "2. git add -A\n"
         f"3. git commit -m 'Fix: {evidence['step_id']}'\n"
