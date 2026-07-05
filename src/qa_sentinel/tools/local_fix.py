@@ -1,3 +1,4 @@
+import socket
 import subprocess
 import time
 from pathlib import Path
@@ -138,7 +139,6 @@ def git_commit_and_push(repo_url: str, step_id: str) -> dict:
 
 
 def _port_is_free(port: int) -> bool:
-    import socket
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.settimeout(0.5)
         return s.connect_ex(("127.0.0.1", port)) != 0
