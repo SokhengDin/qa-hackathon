@@ -12,7 +12,12 @@ fix_writer_agent = LlmAgent(
         "do not call dispatch_fix_to_antigravity; instead report that this needs "
         "human review. When you do act, always pass the SAME environment_id used "
         "for prior features in this run, so file state persists across the whole "
-        "test session."
+        "test session.\n\n"
+        "The evidence argument must be a dict with exactly these keys: "
+        "step_id (string), console_errors (list, may be empty), "
+        "network_failures (list, may be empty), model_stated_intent (string "
+        "summarizing what went wrong), and confidence (float). Do not invent "
+        "different key names — use these exact ones."
     ),
     tools               = [dispatch_fix_to_antigravity],
     after_tool_callback = capture_antigravity_handoff,

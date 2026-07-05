@@ -43,14 +43,19 @@ def dispatch_fix_to_antigravity(
         }],
     }
 
-    branch_name = f"qa-sentinel/fix-{evidence['step_id']}"
-    app_dir     = f"/workspace/app/{app_subpath}".rstrip("/") if app_subpath else "/workspace/app"
+    step_id      = evidence.get("step_id", "unknown-step")
+    branch_name  = f"qa-sentinel/fix-{step_id}"
+    app_dir      = f"/workspace/app/{app_subpath}".rstrip("/") if app_subpath else "/workspace/app"
+
+    console_errors  = evidence.get("console_errors", [])
+    network_failures = evidence.get("network_failures", [])
+    intent          = evidence.get("model_stated_intent") or evidence.get("details") or evidence.get("error", "")
 
     prompt = (
-        f"A UI test failed at step '{evidence['step_id']}'.\n"
-        f"Console errors: {evidence['console_errors']}\n"
-        f"Network failures: {evidence['network_failures']}\n"
-        f"Model's stated intent when the failure occurred: {evidence['model_stated_intent']}\n\n"
+        f"A UI test failed at step '{step_id}'.\n"
+        f"Console errors: {console_errors}\n"
+        f"Network failures: {network_failures}\n"
+        f"Model's stated intent when the failure occurred: {intent}\n\n"
         f"The repository is cloned at /workspace/app. The target app's own code "
         f"lives at {app_dir} — only edit files under that path, do not touch "
         f"other directories in this repo.\n\n"
@@ -59,7 +64,7 @@ def dispatch_fix_to_antigravity(
         "here, not inside the app subdirectory), run exactly these git steps yourself:\n"
         f"1. git checkout -b {branch_name}\n"
         "2. git add -A\n"
-        f"3. git commit -m 'Fix: {evidence['step_id']}'\n"
+        f"3. git commit -m 'Fix: {step_id}'\n"
         f"4. git push origin {branch_name}\n\n"
         "Do not skip the push step — a PR will be opened against this exact branch "
         "name afterward, so the branch must exist on the remote when you finish. "
