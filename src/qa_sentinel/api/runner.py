@@ -16,12 +16,8 @@ APP_NAME = "qa_sentinel_pipeline"
 
 
 async def execute_run(store: SessionStore, run_id: UUID, claimed: dict) -> None:
-    """Provisions a fresh Antigravity sandbox for this run (clone + boot,
-    tasks/task_3.md §3), then drives root_agent one TestStep at a time in
-    dependency order against the app now running inside that sandbox. Writes
-    Step/Evidence/RunLog rows back to Postgres as it goes, per tasks/task_2.md
-    §6 step 5. Runs as a FastAPI background task — the HTTP request that
-    triggered this has already returned 202."""
+    logger.info("[run %s] provisioning sandbox for repo_url=%s port=%s",
+                run_id, claimed["repo_url"], claimed["port"])
     await store.log_event(
         run_id, "test_runner", "status_change",
         {"repo_url": claimed["repo_url"], "port": claimed["port"], "status": "provisioning"},
@@ -36,29 +32,21 @@ async def execute_run(store: SessionStore, run_id: UUID, claimed: dict) -> None:
             install_command = claimed["install_command"],
         )
     except Exception as exc:
-        # A provisioning-time exception (e.g. a transient 5xx from the
-        # Antigravity API that exhausted sandbox_provision.py's own retries)
-        # must still resolve this run's status — otherwise it's stuck at
-        # "running" forever with no error visible anywhere, per the crash
-        # this comment is fixing.
-        logger.exception("Provisioning raised for run %s", run_id)
+        logger.exception("[run %s] provisioning raised", run_id)
         await store.log_event(run_id, "test_runner", "status_change", {"error": str(exc)})
         await store.set_run_status(run_id, "failed")
         return
+
+    logger.info("[run %s] provisioning result: %s", run_id, provisioned["status"])
 
     if provisioned["status"] != "ready":
         await store.log_event(run_id, "test_runner", "status_change", provisioned)
         await store.set_run_status(run_id, "failed")
         return
 
-    # Written onto the Run row immediately (tasks/task_3.md §7), before any
-    # test step runs, so the dashboard can show which environment backs this
-    # run even if a later step fails.
     await store.set_run_environment(run_id, provisioned["environment_id"])
+    logger.info("[run %s] environment ready: %s", run_id, provisioned["environment_id"])
 
-    # The app only becomes reachable once provisioning finishes — base_url is
-    # derived here, not taken from the uploaded test_criteria.md, since the
-    # app doesn't exist anywhere until the sandbox clones and boots it.
     base_url = f"http://localhost:{claimed['port']}"
 
     criteria = TestCriteria(
@@ -86,6 +74,7 @@ async def execute_run(store: SessionStore, run_id: UUID, claimed: dict) -> None:
 
     try:
         for step in criteria.steps:
+            logger.info("[run %s] step '%s' starting: %s", run_id, step.step_id, step.instruction)
             await store.log_event(
                 run_id, "test_runner", "status_change",
                 {"step_id": step.step_id, "status": "starting"},
@@ -110,25 +99,24 @@ async def execute_run(store: SessionStore, run_id: UUID, claimed: dict) -> None:
                 new_message   = types.Content(role="user", parts=[types.Part(text=prompt)]),
                 state_delta   = state_delta,
             ):
+                summary = _summarize_event(event)
+                logger.info("[run %s][%s] %s", run_id, step.step_id, summary)
+
                 await store.log_event(
                     run_id,
                     source     = getattr(event, "author", "test_runner") or "test_runner",
                     event_type = "model_output" if getattr(event, "content", None) else "tool_call",
-                    payload    = {"event": str(event)[:2000]},
+                    payload    = {"summary": summary},
                     step_id    = step.step_id,
                 )
 
-                # run_ui_test_step returns a structured `log` list covering all
-                # five categories docs/computer_use.md asks clients to log
-                # (prompt, screenshot, function_call, safety response, executed
-                # action) — tasks/task_4.md §2.5. Unpack it into its own
-                # RunLog rows rather than relying on the generic event summary
-                # above, which only captures a truncated string repr.
                 for fn_response in event.get_function_responses():
                     tool_log = (fn_response.response or {}).get("log")
                     if not tool_log:
                         continue
                     for entry in tool_log:
+                        logger.info("[run %s][%s][computer_use] %s: %s",
+                                    run_id, step.step_id, entry.get("category"), entry)
                         await store.log_event(
                             run_id,
                             source     = "test_runner",
@@ -143,11 +131,38 @@ async def execute_run(store: SessionStore, run_id: UUID, claimed: dict) -> None:
                         final_status = status
 
             step_status[step.step_id] = final_status
+            logger.info("[run %s] step '%s' finished: %s", run_id, step.step_id, final_status)
             await store.set_step_status(run_id, step.step_id, final_status)
 
+        logger.info("[run %s] completed", run_id)
         await store.set_run_status(run_id, "completed")
 
     except Exception as exc:
-        logger.exception("Run %s failed", run_id)
+        logger.exception("[run %s] failed", run_id)
         await store.log_event(run_id, "test_runner", "status_change", {"error": str(exc)})
         await store.set_run_status(run_id, "failed")
+
+
+def _summarize_event(event) -> str:
+    author = getattr(event, "author", None) or "agent"
+    parts  = []
+
+    for fc in event.get_function_calls():
+        args_preview = {k: v for k, v in (fc.args or {}).items() if k not in ("data",)}
+        parts.append(f"calls {fc.name}({args_preview})")
+
+    for fr in event.get_function_responses():
+        response = fr.response or {}
+        status   = response.get("status")
+        parts.append(f"{fr.name} -> status={status}" if status else f"{fr.name} returned")
+
+    content = getattr(event, "content", None)
+    if content and content.parts:
+        texts = [p.text for p in content.parts if getattr(p, "text", None)]
+        if texts:
+            parts.append(f'says: "{" ".join(texts)[:200]}"')
+
+    if not parts:
+        return f"{author}: (no content/function call)"
+
+    return f"{author}: " + "; ".join(parts)

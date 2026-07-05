@@ -1,3 +1,4 @@
+import logging
 from contextlib import asynccontextmanager
 from typing import Literal
 
@@ -7,6 +8,9 @@ from qa_sentinel.api.runner import execute_run
 from qa_sentinel.api.test_criteria_md import parse_test_criteria_md
 from qa_sentinel.config.settings import settings
 from qa_sentinel.state.session_store import SessionStore
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
+logging.getLogger("qa_sentinel").setLevel(logging.INFO)
 
 store = SessionStore(settings.DATABASE_URL)
 
