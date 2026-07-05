@@ -44,7 +44,7 @@ async def run_ui_test_step(
     url          : str,
     screen_width : int = 1440,
     screen_height: int = 900,
-    headless     : bool = True,
+    headless     : bool = False,
 ) -> dict:
     client        = genai.Client(api_key=settings.GEMINI_API_KEY)
     actions_taken = []
