@@ -9,22 +9,17 @@ AGENT = "antigravity-preview-05-2026"
 def main() -> None:
     client = genai.Client(api_key=settings.GEMINI_API_KEY)
 
-    environment = {
-        "type": "remote",
-        "sources": [{
-            "type": "repository",
-            "source": "https://github.com/active-loop/demo-target-app",
-            "target": "/workspace/app",
-        }],
-    }
+    environment = "remote"
 
-    prompt = "A UI test failed. Diagnose and describe a fix in one paragraph."
+    prompt = (
+        "Clone https://github.com/active-loop/demo-target-app to /workspace/app, "
+        "then list its top-level files and summarize the project in one paragraph."
+    )
 
     kwargs = {
         "agent": AGENT,
         "input": prompt,
         "environment": environment,
-        "background": True,
     }
 
     print("--- request kwargs ---")

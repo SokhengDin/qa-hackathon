@@ -1,3 +1,4 @@
+import base64
 import time
 
 from google import genai
@@ -5,6 +6,13 @@ from google import genai
 from qa_sentinel.config.settings import settings
 
 AGENT = "antigravity-preview-05-2026"
+
+
+def _github_push_credential_header() -> dict | None:
+    if not settings.GITHUB_TOKEN:
+        return None
+    encoded = base64.b64encode(f"x-oauth-basic:{settings.GITHUB_TOKEN}".encode()).decode()
+    return {"Authorization": f"Basic {encoded}"}
 
 
 def dispatch_fix_to_antigravity(
@@ -34,14 +42,18 @@ def dispatch_fix_to_antigravity(
     """
     client = genai.Client(api_key=settings.GEMINI_API_KEY)
 
-    environment = environment_id or {
-        "type"   : "remote",
-        "sources": [{
-            "type"  : "repository",
-            "source": repo_url,
-            "target": "/workspace/app",
-        }],
-    }
+    if environment_id:
+        environment = environment_id
+    else:
+        push_header = _github_push_credential_header()
+        environment = {"type": "remote"}
+        if push_header:
+            environment["network"] = {
+                "allowlist": [
+                    {"domain": "github.com", "transform": push_header},
+                    {"domain": "*"},
+                ]
+            }
 
     step_id      = evidence.get("step_id", "unknown-step")
     branch_name  = f"qa-sentinel/fix-{step_id}"
@@ -51,14 +63,21 @@ def dispatch_fix_to_antigravity(
     network_failures = evidence.get("network_failures", [])
     intent          = evidence.get("model_stated_intent") or evidence.get("details") or evidence.get("error", "")
 
+    clone_step = (
+        f"First, clone the repository yourself: git clone {repo_url} /workspace/app\n\n"
+        if not environment_id else
+        "The repository is already cloned at /workspace/app from a prior step in "
+        "this session — do not clone it again.\n\n"
+    )
+
     prompt = (
         f"A UI test failed at step '{step_id}'.\n"
         f"Console errors: {console_errors}\n"
         f"Network failures: {network_failures}\n"
         f"Model's stated intent when the failure occurred: {intent}\n\n"
-        f"The repository is cloned at /workspace/app. The target app's own code "
-        f"lives at {app_dir} — only edit files under that path, do not touch "
-        f"other directories in this repo.\n\n"
+        f"{clone_step}"
+        f"The target app's own code lives at {app_dir} — only edit files under "
+        f"that path, do not touch other directories in this repo.\n\n"
         f"Diagnose the root cause using this evidence and write a fix under {app_dir}.\n\n"
         "Then, from /workspace/app (the repository root — git commands must run "
         "here, not inside the app subdirectory), run exactly these git steps yourself:\n"
@@ -76,19 +95,20 @@ def dispatch_fix_to_antigravity(
         "agent"      : AGENT,
         "input"      : prompt,
         "environment": environment,
-        "background" : True,
     }
     if previous_interaction_id:
         kwargs["previous_interaction_id"] = previous_interaction_id
 
     interaction = client.interactions.create(**kwargs)
 
-    while interaction.status == "in_progress":
+    while getattr(interaction, "status", "completed") == "in_progress":
         time.sleep(5)
         interaction = client.interactions.get(id=interaction.id)
 
+    final_status = getattr(interaction, "status", "completed")
+
     return {
-        "status"        : "success" if interaction.status == "completed" else "error",
+        "status"        : "success" if final_status in ("completed", None) else "error",
         "environment_id": interaction.environment_id,
         "interaction_id": interaction.id,
         "branch_name"   : branch_name,
