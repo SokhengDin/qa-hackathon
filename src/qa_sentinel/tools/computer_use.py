@@ -102,13 +102,20 @@ def run_ui_test_step(
             for fc in function_calls:
                 log.append({"category": "function_call", "turn": turn, "name": fc.name, "args": fc.arguments})
 
-            blocked = _log_safety_decisions(function_calls, log, turn)
+            blocked, acknowledge_ids = _log_safety_decisions(function_calls, log, turn)
             if blocked:
                 status     = "blocked"
                 final_text = "Action blocked by safety system; halted per policy (see tasks/task_4.md §2.3)."
                 break
 
             results = _execute_function_calls(function_calls, page, screen_width, screen_height)
+            for call_id in acknowledge_ids:
+                # Must be echoed back in the function_result payload, not just
+                # noted on the incoming call — the API rejects the next turn
+                # otherwise with "safety decision ... must be acknowledged in
+                # the corresponding function response."
+                results.setdefault(call_id, {})["safety_acknowledgement"] = True
+
             for fc in function_calls:
                 actions_taken.append({
                     "action": fc.name,
@@ -148,14 +155,21 @@ def run_ui_test_step(
     }
 
 
-def _log_safety_decisions(function_calls, log: list[dict], turn: int) -> bool:
+def _log_safety_decisions(function_calls, log: list[dict], turn: int) -> tuple[bool, list[str]]:
     """Handles safety_decision explicitly per tasks/task_4.md §2.3 — never a
     silent pass-through. `blocked` halts the run (the model's own hard stop).
     `require_confirmation` is auto-acknowledged for this project (the target
     is always a disposable test app, never a real transaction), but every
     such event is still logged so the run's history shows exactly which
-    actions crossed that threshold. Returns True if any call is blocked."""
-    blocked = False
+    actions crossed that threshold.
+
+    Returns (blocked, acknowledge_ids) — acknowledge_ids is the list of
+    function_call ids whose function_result must carry
+    safety_acknowledgement=True. The API rejects the next turn if a
+    require_confirmation decision isn't echoed back in the response, so the
+    caller must apply this to the outgoing result, not the incoming call."""
+    blocked        = False
+    acknowledge_ids: list[str] = []
 
     for fc in function_calls:
         safety = fc.arguments.get("safety_decision")
@@ -174,9 +188,9 @@ def _log_safety_decisions(function_calls, log: list[dict], turn: int) -> bool:
         if decision == "blocked":
             blocked = True
         elif decision == "require_confirmation":
-            fc.arguments["safety_acknowledgement"] = True
+            acknowledge_ids.append(fc.id)
 
-    return blocked
+    return blocked, acknowledge_ids
 
 
 def _denorm_x(x: int, w: int) -> int:
