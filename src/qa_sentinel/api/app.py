@@ -1,4 +1,5 @@
 import logging
+import os
 from contextlib import asynccontextmanager
 from typing import Literal
 
@@ -11,6 +12,9 @@ from qa_sentinel.state.session_store import SessionStore
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
 logging.getLogger("qa_sentinel").setLevel(logging.INFO)
+
+os.environ.setdefault("GOOGLE_API_KEY", settings.GEMINI_API_KEY)
+os.environ.setdefault("GEMINI_API_KEY", settings.GEMINI_API_KEY)
 
 store = SessionStore(settings.DATABASE_URL)
 
