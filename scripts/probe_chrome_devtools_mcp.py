@@ -1,4 +1,5 @@
 import asyncio
+import re
 import sys
 
 from mcp import ClientSession, StdioServerParameters
@@ -6,6 +7,14 @@ from mcp.client.stdio import stdio_client
 from playwright.async_api import async_playwright
 
 CDP_URL = "http://127.0.0.1:9222"
+
+
+def find_page_id(list_pages_text: str, url_substring: str) -> int | None:
+    for line in list_pages_text.splitlines():
+        match = re.match(r"(\d+):\s*(.*)", line.strip())
+        if match and url_substring in match.group(2):
+            return int(match.group(1))
+    return None
 
 
 async def main() -> None:
@@ -50,16 +59,18 @@ async def main() -> None:
                 await page.wait_for_load_state()
 
                 pages2 = await session.call_tool("list_pages", {})
+                pages2_text = ""
                 print("\n=== list_pages (after driving) ===")
                 for block in pages2.content:
                     if block.type == "text":
                         print(block.text)
+                        pages2_text = block.text
 
-                print("\n=== calling select_page(pageIdx=6) ===")
-                select_tools = [t for t in tools.tools if t.name == "select_page"]
-                if select_tools:
-                    print("select_page inputSchema:", select_tools[0].inputSchema)
-                select_result = await session.call_tool("select_page", {"pageIdx": 6})
+                page_id = find_page_id(pages2_text, "/checkout")
+                print(f"\n--- resolved page_id for /checkout: {page_id} ---")
+
+                print(f"\n=== calling select_page(pageId={page_id}) ===")
+                select_result = await session.call_tool("select_page", {"pageId": page_id})
                 print("isError:", select_result.isError)
                 for block in select_result.content:
                     if block.type == "text":
