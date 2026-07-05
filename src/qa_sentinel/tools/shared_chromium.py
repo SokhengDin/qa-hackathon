@@ -38,9 +38,16 @@ async def start(headless: bool = False) -> str:
         args.append("--headless=new")
 
     logger.info("Launching shared Chromium: %s", " ".join(args))
-    _process = subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    _process = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
 
-    await _wait_until_ready()
+    try:
+        await _wait_until_ready()
+    except RuntimeError:
+        output = ""
+        if _process.stdout is not None:
+            output = _process.stdout.read()
+        logger.error("Shared Chromium failed to start. Output:\n%s", output)
+        raise
     logger.info("Shared Chromium ready at %s (pid %s)", CDP_URL, _process.pid)
     return CDP_URL
 
@@ -63,6 +70,10 @@ async def _wait_until_ready() -> None:
     deadline = asyncio.get_event_loop().time() + READY_TIMEOUT_S
     async with httpx.AsyncClient() as client:
         while asyncio.get_event_loop().time() < deadline:
+            if _process is not None and _process.poll() is not None:
+                raise RuntimeError(
+                    f"Shared Chromium process exited early with code {_process.returncode}"
+                )
             try:
                 resp = await client.get(f"{CDP_URL}/json/version", timeout=1)
                 if resp.status_code == 200:
