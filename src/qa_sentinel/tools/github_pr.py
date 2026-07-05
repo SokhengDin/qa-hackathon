@@ -21,7 +21,7 @@ def _find_existing_pr(repo, branch_name: str, base_branch: str):
     return open_prs[0] if open_prs.totalCount > 0 else None
 
 
-def _branch_exists(repo, branch_name: str) -> bool:
+def branch_exists(repo, branch_name: str) -> bool:
     try:
         repo.get_branch(branch_name)
         return True
@@ -55,7 +55,7 @@ def open_evidence_pr(
         return {"status": "error", "message": f"Repo '{repo_full_name}' not found or token lacks access to it."}
 
     for attempt in range(_BRANCH_RETRIES):
-        if _branch_exists(repo, branch_name):
+        if branch_exists(repo, branch_name):
             break
         if attempt < _BRANCH_RETRIES - 1:
             time.sleep(_BRANCH_RETRY_DELAY_SECONDS)

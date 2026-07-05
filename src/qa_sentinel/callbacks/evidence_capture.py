@@ -29,8 +29,11 @@ def evidence_escalation_trigger(tool, args, tool_context, tool_response):
     return tool_response
 
 
+FIX_DISPATCH_TOOL_NAMES = ("dispatch_fix_to_antigravity", "dispatch_fix_locally")
+
+
 def capture_antigravity_handoff(tool, args, tool_context, tool_response):
-    if tool.name != "dispatch_fix_to_antigravity":
+    if tool.name not in FIX_DISPATCH_TOOL_NAMES:
         return tool_response
 
     environment_id = tool_response.get("environment_id")
@@ -48,15 +51,15 @@ def capture_antigravity_handoff(tool, args, tool_context, tool_response):
 
 
 def inject_repo_url_for_fix(tool, args, tool_context):
-    """dispatch_fix_to_antigravity's repo_url must be the real target repo for
-    this run, not something the LLM guesses — it was observed passing
-    '/workspace' (a local sandbox path, not a git URL) instead of the actual
-    repo_url from the run's own payload. Also injects the existing
-    environment_id/previous_interaction_id from state when a prior
-    dispatch_fix_to_antigravity call in this run already established a
-    sandbox, so file state persists across steps as intended — the LLM no
-    longer needs to (and cannot correctly) supply any of these itself."""
-    if tool.name != "dispatch_fix_to_antigravity":
+    """The fix-dispatch tool's repo_url must be the real target repo for this
+    run, not something the LLM guesses — it was observed passing '/workspace'
+    (a local sandbox path, not a git URL) instead of the actual repo_url from
+    the run's own payload. Also injects the existing environment_id/
+    previous_interaction_id from state when dispatching to Antigravity and a
+    prior call in this run already established a sandbox, so file state
+    persists across steps as intended — the LLM no longer needs to (and
+    cannot correctly) supply any of these itself."""
+    if tool.name not in FIX_DISPATCH_TOOL_NAMES:
         return None
 
     repo_url = tool_context.state.get("repo_url")
@@ -69,12 +72,13 @@ def inject_repo_url_for_fix(tool, args, tool_context):
     args["repo_url"] = repo_url
     args["app_subpath"] = tool_context.state.get("app_subpath", "")
 
-    environment_id = tool_context.state.get("antigravity.environment_id")
-    interaction_id = tool_context.state.get("antigravity.previous_interaction_id")
-    if environment_id:
-        args["environment_id"] = environment_id
-    if interaction_id:
-        args["previous_interaction_id"] = interaction_id
+    if tool.name == "dispatch_fix_to_antigravity":
+        environment_id = tool_context.state.get("antigravity.environment_id")
+        interaction_id = tool_context.state.get("antigravity.previous_interaction_id")
+        if environment_id:
+            args["environment_id"] = environment_id
+        if interaction_id:
+            args["previous_interaction_id"] = interaction_id
 
     return None
 
@@ -102,23 +106,23 @@ def inject_repo_full_name(tool, args, tool_context):
     return None
 
 
-def inject_antigravity_ids(tool, args, tool_context):
+def inject_verify_fix_args(tool, args, tool_context):
     if tool.name != "verify_fix":
         return None
 
-    environment_id = tool_context.state.get("antigravity.environment_id")
-    interaction_id = tool_context.state.get("antigravity.previous_interaction_id")
+    repo_full_name = tool_context.state.get("repo_full_name")
+    branch_name    = tool_context.state.get("antigravity.branch_name")
 
-    if not environment_id or not interaction_id:
+    if not repo_full_name or not branch_name:
         return {
             "status"     : "error",
             "output_text": (
-                "No FixWriter environment/interaction found in state — cannot verify "
-                "a fix that was never dispatched to Antigravity. Skipping verification."
+                "No FixWriter branch found in state — cannot verify a fix that "
+                "was never dispatched."
             ),
         }
 
-    args["environment_id"] = environment_id
-    args["previous_interaction_id"] = interaction_id
+    args["repo_full_name"] = repo_full_name
+    args["branch_name"] = branch_name
 
     return None

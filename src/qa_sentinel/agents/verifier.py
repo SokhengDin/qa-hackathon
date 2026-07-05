@@ -1,37 +1,37 @@
-from google import genai
+from github import Auth, Github
 from google.adk.agents import LlmAgent
 from google.adk.tools import FunctionTool
 
-from qa_sentinel.callbacks.evidence_capture import inject_antigravity_ids
+from qa_sentinel.callbacks.evidence_capture import inject_verify_fix_args
 from qa_sentinel.config.settings import settings
+from qa_sentinel.tools.github_pr import branch_exists
 
-AGENT = "antigravity-preview-05-2026"
 
+def verify_fix(repo_full_name: str, branch_name: str) -> dict:
+    """Confirms FixWriter's branch actually landed on GitHub with a real commit,
+    rather than trusting FixWriter's own claim that it wrote a fix. Does not
+    restart the live app or re-run the failing UI step — it only proves a
+    real, pushed diff exists for this fix."""
+    if not settings.GITHUB_TOKEN:
+        return {"status": "error", "output_text": "GITHUB_TOKEN not configured — cannot verify the branch."}
+    if not repo_full_name or not branch_name:
+        return {
+            "status": "error",
+            "output_text": "No FixWriter branch found in state — cannot verify a fix that was never dispatched.",
+        }
 
-def verify_fix(environment_id: str, previous_interaction_id: str, page_url: str) -> dict:
-    """Re-runs the app in its fixed state and checks the console for the original
-    error via chrome-devtools-mcp, registered as a remote MCP tool on this call."""
-    client = genai.Client(api_key=settings.GEMINI_API_KEY)
+    gh   = Github(auth=Auth.Token(settings.GITHUB_TOKEN))
+    repo = gh.get_repo(repo_full_name)
 
-    interaction = client.interactions.create(
-        agent                   = AGENT,
-        environment             = environment_id,
-        previous_interaction_id = previous_interaction_id,
-        input                   = (
-            f"Start the app and navigate to {page_url}. Use the chrome_devtools "
-            "tools to check the console for errors. Report whether the "
-            "originally-reported error is still present."
-        ),
-        tools = [{
-            "type": "mcp_server",
-            "name": "chrome_devtools",              # must be lowercase, ^[a-z0-9_-]+$
-            "url" : "http://127.0.0.1:9222",        # streamable HTTP only, no SSE
-        }],
-    )
+    if branch_exists(repo, branch_name):
+        return {
+            "status"     : "resolved",
+            "output_text": f"Branch '{branch_name}' exists on {repo_full_name} with a real pushed commit.",
+        }
 
     return {
-        "status"     : "resolved" if "no error" in interaction.output_text.lower() else "still_failing",
-        "output_text": interaction.output_text,
+        "status"     : "still_failing",
+        "output_text": f"Branch '{branch_name}' was not found on {repo_full_name} — the fix was not actually pushed.",
     }
 
 
@@ -42,14 +42,13 @@ verifier_agent = LlmAgent(
         "You have exactly ONE tool available: verify_fix. You cannot browse "
         "files, list directories, run shell commands, or inspect the repo "
         "directly — do not attempt to call any tool other than verify_fix. "
-        "The environment_id and previous_interaction_id arguments are filled "
-        "in for you automatically; pass any placeholder string for them.\n\n"
-        "Given a fix that was just applied, call verify_fix exactly once, "
-        "with page_url set to the app's base URL, to confirm the original "
-        "console/network error is actually gone before marking this feature "
+        "repo_full_name and branch_name are filled in for you automatically; "
+        "pass any placeholder string for them.\n\n"
+        "Given a fix that was just applied, call verify_fix exactly once to "
+        "confirm the branch was actually pushed before marking this feature "
         "'fixed_and_verified'. Never trust FixWriter's own claim without this "
         "independent re-check, and never call verify_fix more than once."
     ),
     tools                = [FunctionTool(func=verify_fix)],
-    before_tool_callback = inject_antigravity_ids,
+    before_tool_callback = inject_verify_fix_args,
 )
