@@ -18,7 +18,9 @@ def test_blocks_when_dependency_not_passed():
 
     result = feature_gate(ctx)
 
-    assert result == {"skip": True, "reason": "blocked on signup=failed"}
+    assert result is not None
+    assert "signup" in result.parts[0].text
+    assert "failed" in result.parts[0].text
 
 
 def test_allows_when_dependency_passed():

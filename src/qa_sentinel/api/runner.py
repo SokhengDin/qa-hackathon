@@ -119,7 +119,12 @@ async def execute_run(store: SessionStore, run_id: UUID, claimed: dict) -> None:
                 )
 
                 for fn_response in event.get_function_responses():
-                    tool_log = (fn_response.response or {}).get("log")
+                    response = fn_response.response or {}
+
+                    if fn_response.name == "run_ui_test_step" and response.get("status"):
+                        final_status = response["status"]
+
+                    tool_log = response.get("log")
                     if not tool_log:
                         continue
                     for entry in tool_log:
