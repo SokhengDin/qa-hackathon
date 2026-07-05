@@ -52,11 +52,14 @@ def capture_antigravity_handoff(tool, args, tool_context, tool_response):
 
     environment_id = tool_response.get("environment_id")
     interaction_id = tool_response.get("interaction_id")
+    branch_name    = tool_response.get("branch_name")
 
     if environment_id:
         tool_context.state["antigravity.environment_id"] = environment_id
     if interaction_id:
         tool_context.state["antigravity.previous_interaction_id"] = interaction_id
+    if branch_name:
+        tool_context.state["antigravity.branch_name"] = branch_name
 
     return tool_response
 
@@ -66,13 +69,21 @@ def inject_repo_full_name(tool, args, tool_context):
         return None
 
     repo_full_name = tool_context.state.get("repo_full_name")
+    branch_name    = tool_context.state.get("antigravity.branch_name")
+
     if not repo_full_name:
         return {
             "status" : "error",
             "message": "repo_full_name not found in state — cannot open a PR without a resolved target repo.",
         }
+    if not branch_name:
+        return {
+            "status" : "error",
+            "message": "No branch was pushed by FixWriter for this step — cannot open a PR without a real head branch.",
+        }
 
     args["repo_full_name"] = repo_full_name
+    args["branch_name"]    = branch_name
     return None
 
 

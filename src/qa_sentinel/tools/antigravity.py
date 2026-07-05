@@ -25,6 +25,7 @@ def dispatch_fix_to_antigravity(
 
     Returns:
         dict with status, environment_id (for reuse), interaction_id (for chaining),
+        branch_name (the git branch the sandbox was instructed to push the fix to),
         and the agent's output_text describing the fix.
     """
     client = genai.Client(api_key=settings.GEMINI_API_KEY)
@@ -38,13 +39,23 @@ def dispatch_fix_to_antigravity(
         }],
     }
 
+    branch_name = f"qa-sentinel/fix-{evidence['step_id']}"
+
     prompt = (
         f"A UI test failed at step '{evidence['step_id']}'.\n"
         f"Console errors: {evidence['console_errors']}\n"
         f"Network failures: {evidence['network_failures']}\n"
         f"Model's stated intent when the failure occurred: {evidence['model_stated_intent']}\n\n"
-        "Diagnose the root cause using this evidence, write a fix in /workspace/app, "
-        "and explain the fix in one paragraph."
+        "Diagnose the root cause using this evidence and write a fix in /workspace/app.\n\n"
+        "Then, inside /workspace/app, run exactly these git steps yourself:\n"
+        f"1. git checkout -b {branch_name}\n"
+        "2. git add -A\n"
+        f"3. git commit -m 'Fix: {evidence['step_id']}'\n"
+        f"4. git push origin {branch_name}\n\n"
+        "Do not skip the push step — a PR will be opened against this exact branch "
+        "name afterward, so the branch must exist on the remote when you finish. "
+        f"End your final response with the exact line: BRANCH={branch_name}\n\n"
+        "Finally, explain the fix in one paragraph."
     )
 
     kwargs = {
@@ -66,5 +77,6 @@ def dispatch_fix_to_antigravity(
         "status"        : "success" if interaction.status == "completed" else "error",
         "environment_id": interaction.environment_id,
         "interaction_id": interaction.id,
+        "branch_name"   : branch_name,
         "output_text"   : interaction.output_text,
     }
