@@ -37,6 +37,7 @@ def guard_run_ui_test_step(tool, args, tool_context):
         assert_safe_target(args.get("url", ""))
 
     step_id      = tool_context.state.get("current_step_id")
+    args["step_id"] = step_id
     fix_attempts = tool_context.state.get(f"step.{step_id}.fix_attempts", 0)
     call_key     = f"step.{step_id}.run_ui_test_step_called.{fix_attempts}"
     already_ran  = tool_context.state.get(call_key)

@@ -1,6 +1,8 @@
 import asyncio
 import base64
 import json
+import re
+from datetime import UTC, datetime
 from pathlib import Path
 
 from google import genai
@@ -59,6 +61,7 @@ assessment of the current screen instead of attempting anything new.
 async def run_ui_test_step(
     instruction  : str,
     url          : str,
+    step_id      : str | None = None,
     screen_width : int = 1440,
     screen_height: int = 900,
 ) -> dict:
@@ -164,7 +167,7 @@ async def run_ui_test_step(
                 break
 
         EVIDENCE_DIR.mkdir(parents=True, exist_ok=True)
-        screenshot_path = str(EVIDENCE_DIR / f"{instruction[:30].replace(' ', '_')}_{turn}.png")
+        screenshot_path = str(EVIDENCE_DIR / _screenshot_filename(step_id, status, final_text))
         await page.screenshot(path=screenshot_path)
         final_url = page.url
         await context.close()
@@ -179,6 +182,18 @@ async def run_ui_test_step(
         "console_errors"  : console_errors,
         "network_failures": network_failures,
     }
+
+
+def _slugify(text: str, max_words: int = 6) -> str:
+    words = re.findall(r"[a-zA-Z0-9]+", text.lower())[:max_words]
+    return "-".join(words) if words else "no-reason"
+
+
+def _screenshot_filename(step_id: str | None, status: str, final_text: str) -> str:
+    timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S")
+    step_slug = step_id or "unknown-step"
+    reason    = _slugify(final_text)
+    return f"{step_slug}_{status}_{reason}_{timestamp}.png"
 
 
 def _attach_evidence_listeners(page, console_errors: list[dict], network_failures: list[dict]) -> None:
