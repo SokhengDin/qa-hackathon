@@ -33,6 +33,7 @@ async def start(headless: bool = False) -> str:
         f"--remote-debugging-port={CDP_PORT}",
         "--no-first-run",
         "--no-default-browser-check",
+        "--no-sandbox",
     ]
     if headless:
         args.append("--headless=new")
