@@ -88,9 +88,10 @@ async def execute_run(store: SessionStore, run_id: UUID, claimed: dict) -> None:
             "port"          : claimed["port"],
             "start_command" : claimed["start_command"],
             "app_subpath"   : "",
+            "base_url"      : base_url,
         },
     )
-
+ 
     step_status: dict[str, str] = {}
 
     try:

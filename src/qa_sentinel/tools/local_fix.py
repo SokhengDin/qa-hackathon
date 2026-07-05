@@ -137,18 +137,42 @@ def git_commit_and_push(repo_url: str, step_id: str) -> dict:
     return {"status": "success", "branch_name": branch_name}
 
 
+def _port_is_free(port: int) -> bool:
+    import socket
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.settimeout(0.5)
+        return s.connect_ex(("127.0.0.1", port)) != 0
+
+
+def _wait_until(predicate, timeout_s: int, interval_s: float = 0.5) -> bool:
+    deadline = time.time() + timeout_s
+    while time.time() < deadline:
+        if predicate():
+            return True
+        time.sleep(interval_s)
+    return False
+
+
 def restart_live_app(port: int, repo_url: str, start_command: str) -> dict:
     """Kills whatever is listening on `port` (the live app TestRunner has been
     testing against) and restarts it from the FIXED local clone, on the same
     port, so the next TestRunner pass exercises the real fix through the
-    actual running app — not a throwaway copy."""
+    actual running app — not a throwaway copy. Waits for the port to actually
+    free up before rebinding (fuser -k only sends the signal, it does not
+    wait for the process to exit), and waits for the new process to actually
+    start listening before declaring success."""
     workdir = _workdir_for(repo_url)
 
     kill = subprocess.run(
         f"fuser -k {port}/tcp || true",
         shell=True, capture_output=True, text=True, timeout=SHELL_TIMEOUT_S,
     )
-    time.sleep(1)
+    if not _wait_until(lambda: _port_is_free(port), timeout_s=10):
+        return {
+            "status" : "error",
+            "message": f"Port {port} was still in use {10}s after attempting to kill it.",
+            "kill_output": kill.stdout + kill.stderr,
+        }
 
     log_path = workdir / "qa_sentinel_restart.log"
     with open(log_path, "w") as log_file:
@@ -161,7 +185,14 @@ def restart_live_app(port: int, repo_url: str, start_command: str) -> dict:
             start_new_session=True,
         )
 
-    time.sleep(RESTART_WAIT_S)
+    if not _wait_until(lambda: not _port_is_free(port), timeout_s=RESTART_WAIT_S):
+        boot_output = log_path.read_text() if log_path.exists() else ""
+        return {
+            "status" : "error",
+            "message": f"App did not start listening on port {port} within {RESTART_WAIT_S}s.",
+            "boot_output": boot_output[-2000:],
+            "kill_output": kill.stdout + kill.stderr,
+        }
 
     check = subprocess.run(
         f"curl -s -o /dev/null -w '%{{http_code}}' http://localhost:{port} --max-time 5",

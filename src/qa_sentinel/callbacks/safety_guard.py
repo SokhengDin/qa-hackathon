@@ -19,11 +19,22 @@ def guard_run_ui_test_step(tool, args, tool_context):
     counting side effects and confusing which run_ui_test_step result the
     console/network evidence actually belongs to. Keyed by fix_attempts, not
     just step_id, so a legitimate loop-back re-run (after FixerAgent pushes a
-    fix) still gets exactly one fresh run_ui_test_step call of its own."""
+    fix) still gets exactly one fresh run_ui_test_step call of its own.
+
+    Also overwrites args["url"] with the real base_url from state — on a
+    loop-back re-run (after FixerAgent), the model has been observed
+    hallucinating a plausible-but-wrong port (e.g. localhost:3000 instead of
+    the actual localhost:3005) rather than reading it precisely, silently
+    testing nothing or the wrong app entirely."""
     if tool.name != "run_ui_test_step":
         return None
 
-    assert_safe_target(args.get("url", ""))
+    base_url = tool_context.state.get("base_url")
+    if base_url:
+        assert_safe_target(base_url)
+        args["url"] = base_url
+    else:
+        assert_safe_target(args.get("url", ""))
 
     step_id      = tool_context.state.get("current_step_id")
     fix_attempts = tool_context.state.get(f"step.{step_id}.fix_attempts", 0)
