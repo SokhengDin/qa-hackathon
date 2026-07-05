@@ -2,8 +2,9 @@ from google.adk.agents import LlmAgent
 
 from qa_sentinel.callbacks.evidence_capture import (
     capture_error_evidence,
+    capture_list_pages,
     evidence_escalation_trigger,
-    require_page_selected_first,
+    resolve_target_page,
 )
 from qa_sentinel.callbacks.feature_gate     import feature_gate
 from qa_sentinel.callbacks.safety_guard     import guard_run_ui_test_step
@@ -17,6 +18,7 @@ chrome_devtools = build_chrome_devtools_toolset(cdp_url=CDP_URL)
 
 def _after_tool(tool, args, tool_context, tool_response):
     tool_response = evidence_escalation_trigger(tool, args, tool_context, tool_response)
+    tool_response = capture_list_pages(tool, args, tool_context, tool_response)
     tool_response = capture_error_evidence(tool, args, tool_context, tool_response)
     return tool_response
 
@@ -58,16 +60,13 @@ test_runner_agent = LlmAgent(
         "run_ui_test_step call, needs_chrome_devtools_check is always set in "
         "state — you MUST run this exact 3-step sequence before deciding this "
         "step's final status:\n"
-        "  1. Call list_pages. It lists every open browser tab/page with an "
-        "index and URL, and marks which one is currently [selected].\n"
-        "  2. Find the page whose URL matches the page run_ui_test_step just "
-        "acted on (check the URL run_ui_test_step reported). Call select_page "
-        "with that page's id — chrome-devtools-mcp reports data for whichever "
-        "page is selected, which is often a stale blank tab, NOT the page "
-        "Computer Use just used, until you explicitly select it.\n"
-        "  3. Only after select_page succeeds, call list_console_messages and "
-        "list_network_requests. Calling them before selecting the right page "
-        "will silently return empty results even when real errors exist.\n\n"
+        "  1. Call list_pages.\n"
+        "  2. Call select_page once (the correct page id is resolved for you "
+        "automatically — the exact argument value you pass does not matter, "
+        "just call it so the right page gets selected).\n"
+        "  3. Only after select_page returns, call list_console_messages and "
+        "list_network_requests. Calling them before select_page will silently "
+        "return empty results even when real errors exist.\n\n"
         "A screenshot only shows what rendered; it cannot show a server-side "
         "failure (e.g. a 403 or 500) that the page displays no visible error "
         "for. If list_console_messages or list_network_requests reveal a "
@@ -85,7 +84,7 @@ test_runner_agent = LlmAgent(
     ),
     tools                 = [run_ui_test_step, chrome_devtools],
     before_agent_callback = feature_gate,
-    before_tool_callback  = [guard_run_ui_test_step, require_page_selected_first],
+    before_tool_callback  = [guard_run_ui_test_step, resolve_target_page],
     after_tool_callback   = _after_tool,
     after_agent_callback  = compute_step_verdict,
 )

@@ -162,11 +162,13 @@ async def run_ui_test_step(
         EVIDENCE_DIR.mkdir(parents=True, exist_ok=True)
         screenshot_path = str(EVIDENCE_DIR / f"{instruction[:30].replace(' ', '_')}_{turn}.png")
         await page.screenshot(path=screenshot_path)
+        final_url = page.url
         await context.close()
 
     return {
         "status"         : status,
         "screenshot_path": screenshot_path,
+        "final_url"      : final_url,
         "actions_taken"  : actions_taken,
         "final_text"     : final_text,
         "log"            : log,
