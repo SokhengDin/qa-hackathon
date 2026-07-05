@@ -1,6 +1,7 @@
 from google.adk.agents import LlmAgent
 from google.adk.tools import FunctionTool
 
+from qa_sentinel.callbacks.evidence_capture import inject_repo_full_name
 from qa_sentinel.tools.github_pr import open_evidence_pr
 
 pr_agent = LlmAgent(
@@ -22,5 +23,6 @@ pr_agent = LlmAgent(
         "evidence bundle as the PR body — never write a vague description. "
         "One PR per feature fixed in this run, not one giant combined PR."
     ),
-    tools = [FunctionTool(func=open_evidence_pr)],
+    tools                = [FunctionTool(func=open_evidence_pr)],
+    before_tool_callback = inject_repo_full_name,
 )

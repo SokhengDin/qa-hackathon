@@ -8,6 +8,7 @@ from google.genai import types
 from qa_sentinel.agents.workflow import root_agent
 from qa_sentinel.schemas.test_criteria import TestCriteria, TestStep
 from qa_sentinel.state.session_store import SessionStore
+from qa_sentinel.tools.github_pr import repo_full_name_from_url
 from qa_sentinel.tools.sandbox_provision import provision_and_boot_app
 
 logger = logging.getLogger("qa_sentinel.runner")
@@ -75,8 +76,14 @@ async def execute_run(store: SessionStore, run_id: UUID, claimed: dict) -> None:
     runner          = Runner(agent=root_agent, app_name=APP_NAME, session_service=session_service)
     user_id         = f"run-{run_id}"
     session_id      = f"run-{run_id}"
+    repo_full_name  = repo_full_name_from_url(claimed["repo_url"])
 
-    await session_service.create_session(app_name=APP_NAME, user_id=user_id, session_id=session_id)
+    await session_service.create_session(
+        app_name=APP_NAME,
+        user_id=user_id,
+        session_id=session_id,
+        state={"repo_full_name": repo_full_name},
+    )
 
     step_status: dict[str, str] = {}
 

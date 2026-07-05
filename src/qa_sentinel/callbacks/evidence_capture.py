@@ -61,6 +61,21 @@ def capture_antigravity_handoff(tool, args, tool_context, tool_response):
     return tool_response
 
 
+def inject_repo_full_name(tool, args, tool_context):
+    if tool.name != "open_evidence_pr":
+        return None
+
+    repo_full_name = tool_context.state.get("repo_full_name")
+    if not repo_full_name:
+        return {
+            "status" : "error",
+            "message": "repo_full_name not found in state — cannot open a PR without a resolved target repo.",
+        }
+
+    args["repo_full_name"] = repo_full_name
+    return None
+
+
 def inject_antigravity_ids(tool, args, tool_context):
     if tool.name != "verify_fix":
         return None
