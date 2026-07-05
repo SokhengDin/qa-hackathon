@@ -47,6 +47,38 @@ def capture_antigravity_handoff(tool, args, tool_context, tool_response):
     return tool_response
 
 
+def inject_repo_url_for_fix(tool, args, tool_context):
+    """dispatch_fix_to_antigravity's repo_url must be the real target repo for
+    this run, not something the LLM guesses — it was observed passing
+    '/workspace' (a local sandbox path, not a git URL) instead of the actual
+    repo_url from the run's own payload. Also injects the existing
+    environment_id/previous_interaction_id from state when a prior
+    dispatch_fix_to_antigravity call in this run already established a
+    sandbox, so file state persists across steps as intended — the LLM no
+    longer needs to (and cannot correctly) supply any of these itself."""
+    if tool.name != "dispatch_fix_to_antigravity":
+        return None
+
+    repo_url = tool_context.state.get("repo_url")
+    if not repo_url:
+        return {
+            "status" : "error",
+            "message": "repo_url not found in state — cannot dispatch a fix without a resolved target repo.",
+        }
+
+    args["repo_url"] = repo_url
+    args["app_subpath"] = tool_context.state.get("app_subpath", "")
+
+    environment_id = tool_context.state.get("antigravity.environment_id")
+    interaction_id = tool_context.state.get("antigravity.previous_interaction_id")
+    if environment_id:
+        args["environment_id"] = environment_id
+    if interaction_id:
+        args["previous_interaction_id"] = interaction_id
+
+    return None
+
+
 def inject_repo_full_name(tool, args, tool_context):
     if tool.name != "open_evidence_pr":
         return None

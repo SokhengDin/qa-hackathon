@@ -18,7 +18,7 @@ def _github_push_credential_header() -> list[dict] | None:
 def dispatch_fix_to_antigravity(
     evidence: dict,
     repo_url: str,
-    app_subpath: str = "demo_target_app",
+    app_subpath: str = "",
     environment_id: str | None = None,
     previous_interaction_id: str | None = None,
 ) -> dict:

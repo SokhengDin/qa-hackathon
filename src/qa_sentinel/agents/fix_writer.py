@@ -1,6 +1,6 @@
 from google.adk.agents import LlmAgent
 
-from qa_sentinel.callbacks.evidence_capture import capture_antigravity_handoff
+from qa_sentinel.callbacks.evidence_capture import capture_antigravity_handoff, inject_repo_url_for_fix
 from qa_sentinel.tools.antigravity import dispatch_fix_to_antigravity
 
 fix_writer_agent = LlmAgent(
@@ -10,15 +10,18 @@ fix_writer_agent = LlmAgent(
         "You receive a failed test step's evidence bundle. Only act if confidence "
         "is medium or high (see state['evidence.<step_id>.confidence']) — if low, "
         "do not call dispatch_fix_to_antigravity; instead report that this needs "
-        "human review. When you do act, always pass the SAME environment_id used "
-        "for prior features in this run, so file state persists across the whole "
-        "test session.\n\n"
+        "human review.\n\n"
         "The evidence argument must be a dict with exactly these keys: "
         "step_id (string), console_errors (list, may be empty), "
         "network_failures (list, may be empty), model_stated_intent (string "
         "summarizing what went wrong), and confidence (float). Do not invent "
-        "different key names — use these exact ones."
+        "different key names — use these exact ones.\n\n"
+        "repo_url, app_subpath, environment_id, and previous_interaction_id are "
+        "all resolved for you automatically — pass any placeholder string/value "
+        "for repo_url and app_subpath, you never need to know or guess the real "
+        "ones."
     ),
-    tools               = [dispatch_fix_to_antigravity],
-    after_tool_callback = capture_antigravity_handoff,
+    tools                = [dispatch_fix_to_antigravity],
+    before_tool_callback = inject_repo_url_for_fix,
+    after_tool_callback  = capture_antigravity_handoff,
 )

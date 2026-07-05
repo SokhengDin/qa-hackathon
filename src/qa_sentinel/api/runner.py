@@ -82,7 +82,7 @@ async def execute_run(store: SessionStore, run_id: UUID, claimed: dict) -> None:
         app_name=APP_NAME,
         user_id=user_id,
         session_id=session_id,
-        state={"repo_full_name": repo_full_name},
+        state={"repo_full_name": repo_full_name, "repo_url": claimed["repo_url"]},
     )
 
     step_status: dict[str, str] = {}
