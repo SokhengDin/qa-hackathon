@@ -39,10 +39,16 @@ verifier_agent = LlmAgent(
     name        = "Verifier",
     model       = "gemini-3.5-flash",
     instruction = (
-        "Given a fix that was just applied, call verify_fix to confirm the "
-        "original console/network error is actually gone before marking this "
-        "feature 'fixed_and_verified'. Never trust FixWriter's own claim without "
-        "this independent re-check."
+        "You have exactly ONE tool available: verify_fix. You cannot browse "
+        "files, list directories, run shell commands, or inspect the repo "
+        "directly — do not attempt to call any tool other than verify_fix. "
+        "The environment_id and previous_interaction_id arguments are filled "
+        "in for you automatically; pass any placeholder string for them.\n\n"
+        "Given a fix that was just applied, call verify_fix exactly once, "
+        "with page_url set to the app's base URL, to confirm the original "
+        "console/network error is actually gone before marking this feature "
+        "'fixed_and_verified'. Never trust FixWriter's own claim without this "
+        "independent re-check, and never call verify_fix more than once."
     ),
     tools                = [FunctionTool(func=verify_fix)],
     before_tool_callback = inject_antigravity_ids,
