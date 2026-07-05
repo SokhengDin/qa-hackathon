@@ -16,11 +16,10 @@ const PRODUCTS = {
 
 const DISCOUNT_CODES = { SAVE10: 0.1 };
 
-// BUG: missing an entry for "ceramic-mug" — whoever added this table forgot
-// the most popular product. Any checkout that includes it destructures a
-// property off an undefined entry, throwing an unhandled TypeError, which
-// Express turns into a bare 500 with no user-facing message.
+// BUG FIX: Added "ceramic-mug" to SHIPPING_COST_BY_PRODUCT map to prevent a TypeError 
+// during checkout calculation when a cart contains a "ceramic-mug".
 const SHIPPING_COST_BY_PRODUCT = {
+  "ceramic-mug": { flatRate: 2.0 },
   "steel-bottle": { flatRate: 4.0 },
   "canvas-tote": { flatRate: 3.0 },
 };
@@ -100,7 +99,8 @@ app.post("/api/checkout", (req, res) => {
   let orderTotal = 0;
   for (const [productId, quantity] of Object.entries(session.cart)) {
     const product = PRODUCTS[productId];
-    const { flatRate } = SHIPPING_COST_BY_PRODUCT[productId];
+    const shippingInfo = SHIPPING_COST_BY_PRODUCT[productId] || { flatRate: 0.0 };
+    const flatRate = shippingInfo.flatRate;
     orderTotal += (product.price + flatRate) * quantity;
   }
 
