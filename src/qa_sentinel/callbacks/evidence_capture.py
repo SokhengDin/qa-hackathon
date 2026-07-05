@@ -8,6 +8,11 @@ def evidence_escalation_trigger(tool, args, tool_context, tool_response):
     can catch what a screenshot cannot."""
     if tool.name == "run_ui_test_step":
         tool_context.state["needs_chrome_devtools_check"] = True
+
+        step_id = tool_context.state.get("current_step_id")
+        tool_context.state[f"evidence.{step_id}.run_status"] = tool_response.get("status", "failed")
+        tool_context.state[f"evidence.{step_id}.intent"]     = tool_response.get("final_text", "")
+
     return tool_response
 
 

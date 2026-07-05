@@ -15,7 +15,21 @@ const CATEGORY_COLOR: Record<string, string> = {
   status_change   : "text-ink-muted",
   tool_call       : "text-ink-muted",
   model_output    : "text-ink",
+  mcp_tool_call   : "text-accent",
 };
+
+function colorForLog(log: RunLog): string {
+  const payload = log.payload as Record<string, unknown>;
+  const category = (payload.category as string) ?? log.eventType;
+
+  if (category === "mcp_tool_call") {
+    if (payload.isError) return "text-status-failed";
+    if (payload.hit)     return "text-status-blocked";
+    return "text-status-passed";
+  }
+
+  return CATEGORY_COLOR[category] ?? "text-ink-muted";
+}
 
 function summarize(log: RunLog): string {
   const payload = log.payload as Record<string, unknown>;
@@ -38,6 +52,13 @@ function summarize(log: RunLog): string {
     }
     case "safety_response":
       return `safety: ${payload.decision} — ${payload.explanation ?? ""}`;
+    case "mcp_tool_call": {
+      const text = (payload.text as string) ?? "";
+      const preview = text.trim().length > 0 ? text.trim().split("\n")[0] : "(empty response)";
+      if (payload.isError) return `chrome-devtools: ${payload.name} errored — ${preview}`;
+      if (payload.hit)     return `chrome-devtools: ${payload.name} found an issue — ${preview}`;
+      return `chrome-devtools: ${payload.name} clean — ${preview}`;
+    }
     case "status_change": {
       const rest = Object.entries(payload)
         .filter(([k]) => k !== "category")
@@ -72,7 +93,7 @@ export function ActivityFeed({ logs }: { logs: RunLog[]; runId: string }) {
       {logs.map((log) => {
         const payload = log.payload as Record<string, unknown>;
         const category = (payload.category as string) ?? log.eventType;
-        const colorClass = CATEGORY_COLOR[category] ?? "text-ink-muted";
+        const colorClass = colorForLog(log);
 
         return (
           <div key={log.id} className="flex gap-2 leading-relaxed">

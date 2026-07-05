@@ -9,7 +9,13 @@ root_agent = Workflow(
     name  = "qa_sentinel_pipeline",
     edges = [
         ("START"          , test_runner_agent),
-        (test_runner_agent, fix_writer_agent),   # only proceeds if confidence gate passes
+        # TestRunner's own after_agent_callback (compute_step_verdict) sets
+        # actions.route to "needs_fix" only when the step actually failed with
+        # medium/high confidence evidence. A passing step, or a low-confidence
+        # failure routed to human review, emits no matching route here and the
+        # graph terminates at TestRunner for that step — FixWriter/Verifier/
+        # PRAgent never run for steps that don't need them.
+        (test_runner_agent, {"needs_fix": fix_writer_agent}),
         (fix_writer_agent , verifier_agent),
         (verifier_agent   , pr_agent),           # only proceeds if verifier confirms fix
     ],

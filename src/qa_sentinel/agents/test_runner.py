@@ -3,6 +3,7 @@ from google.adk.agents import LlmAgent
 from qa_sentinel.callbacks.evidence_capture import capture_error_evidence, evidence_escalation_trigger
 from qa_sentinel.callbacks.feature_gate     import feature_gate
 from qa_sentinel.callbacks.safety_guard     import guard_run_ui_test_step
+from qa_sentinel.callbacks.step_verdict     import compute_step_verdict
 from qa_sentinel.tools.chrome_devtools_mcp  import build_chrome_devtools_toolset
 from qa_sentinel.tools.computer_use         import run_ui_test_step
 from qa_sentinel.tools.shared_chromium      import CDP_URL
@@ -71,4 +72,5 @@ test_runner_agent = LlmAgent(
     before_agent_callback = feature_gate,
     before_tool_callback  = guard_run_ui_test_step,
     after_tool_callback   = _after_tool,
+    after_agent_callback  = compute_step_verdict,
 )

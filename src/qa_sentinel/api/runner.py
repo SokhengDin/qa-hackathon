@@ -131,6 +131,26 @@ async def execute_run(store: SessionStore, run_id: UUID, claimed: dict) -> None:
                     if fn_response.name == "run_ui_test_step" and response.get("status"):
                         final_status = response["status"]
 
+                    if fn_response.name in ("list_console_messages", "list_network_requests", "take_snapshot"):
+                        mcp_text  = _extract_mcp_text(response)
+                        is_error  = bool(response.get("isError"))
+                        has_hit   = _mcp_response_flags_issue(fn_response.name, mcp_text)
+                        logger.info("[run %s][%s][chrome_devtools] %s isError=%s hit=%s",
+                                    run_id, step.step_id, fn_response.name, is_error, has_hit)
+                        await store.log_event(
+                            run_id,
+                            source     = "test_runner",
+                            event_type = "mcp_tool_call",
+                            payload    = {
+                                "category": "mcp_tool_call",
+                                "name"    : fn_response.name,
+                                "isError" : is_error,
+                                "hit"     : has_hit,
+                                "text"    : mcp_text[:2000],
+                            },
+                            step_id    = step.step_id,
+                        )
+
                     tool_log = response.get("log")
                     if not tool_log:
                         continue
@@ -161,6 +181,23 @@ async def execute_run(store: SessionStore, run_id: UUID, claimed: dict) -> None:
         logger.exception("[run %s] failed", run_id)
         await store.log_event(run_id, "test_runner", "status_change", {"error": str(exc)})
         await store.set_run_status(run_id, "failed")
+
+
+def _extract_mcp_text(response: dict) -> str:
+    parts = []
+    for block in response.get("content", []):
+        if block.get("type") == "text":
+            parts.append(block.get("text", ""))
+    return "\n".join(parts)
+
+
+def _mcp_response_flags_issue(tool_name: str, text: str) -> bool:
+    lowered = text.lower()
+    if tool_name == "list_console_messages":
+        return "error" in lowered
+    if tool_name == "list_network_requests":
+        return any(f" {code} " in f" {lowered} " for code in ("400", "401", "403", "404", "500", "502", "503"))
+    return False
 
 
 def _summarize_event(event) -> str:
