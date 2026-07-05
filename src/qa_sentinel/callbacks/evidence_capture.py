@@ -1,23 +1,46 @@
 def evidence_escalation_trigger(tool, args, tool_context, tool_response):
     """Deterministic after_tool_callback on the Computer Use tool's own result —
-    do not rely on the LLM deciding "should I check console logs now?"."""
-    if tool.name == "run_ui_test_step" and tool_response.get("status") != "passed":
+    do not rely on the LLM deciding "should I check console logs now?". Always
+    escalate, even when run_ui_test_step self-reports "passed": that status is
+    itself a visual judgment call by Computer Use, and a silent server-side
+    failure (e.g. a 403 the page never displays) looks identical to success
+    on screen. chrome-devtools-mcp is cheap to call and is the only path that
+    can catch what a screenshot cannot."""
+    if tool.name == "run_ui_test_step":
         tool_context.state["needs_chrome_devtools_check"] = True
     return tool_response
+
+
+def _extract_text(tool_response: dict) -> str:
+    """chrome-devtools-mcp's MCP tools return {"content": [{"type": "text",
+    "text": "..."}], "isError": bool} — a markdown text blob, not a
+    structured {"messages": [...]} / {"requests": [...]} shape."""
+    parts = []
+    for block in tool_response.get("content", []):
+        if block.get("type") == "text":
+            parts.append(block.get("text", ""))
+    return "\n".join(parts)
 
 
 def capture_error_evidence(tool, args, tool_context, tool_response):
     """Turns raw chrome-devtools-mcp output into state, keyed by the current step."""
     step_id = tool_context.state.get("current_step_id")
+    text    = _extract_text(tool_response)
 
     if tool.name == "list_console_messages":
-        errors = [m for m in tool_response.get("messages", []) if m.get("level") == "error"]
-        if errors:
-            tool_context.state[f"evidence.{step_id}.console"] = errors
+        error_lines = [line for line in text.splitlines() if "error" in line.lower()]
+        if error_lines:
+            tool_context.state[f"evidence.{step_id}.console"] = error_lines
 
     if tool.name == "list_network_requests":
-        failed = [r for r in tool_response.get("requests", []) if r.get("status", 200) >= 400]
-        if failed:
-            tool_context.state[f"evidence.{step_id}.network"] = failed
+        failure_lines = [
+            line for line in text.splitlines()
+            if any(f" {code} " in f" {line} " for code in ("400", "401", "403", "404", "500", "502", "503"))
+        ]
+        if failure_lines:
+            tool_context.state[f"evidence.{step_id}.network"] = failure_lines
+
+    if tool.name == "take_snapshot" and text:
+        tool_context.state[f"evidence.{step_id}.snapshot"] = text
 
     return tool_response

@@ -28,7 +28,7 @@ export function ConfidenceBadge({ score }: { score: number }) {
   const level = bucket(score);
   return (
     <span
-      className={`inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5
+      className={`inline-flex items-center gap-2 rounded-full border border-border-soft bg-surface-raised
                   px-3 py-1 text-sm font-medium ${TEXT_CLASS[level]}`}
     >
       <span className={`h-2 w-2 rounded-full ${DOT_CLASS[level]}`} />

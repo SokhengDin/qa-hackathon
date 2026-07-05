@@ -18,11 +18,11 @@ export function ReviewForm({ stepId }: { stepId: string }) {
   }
 
   if (decided) {
-    return <p className="text-sm text-white/60">Recorded: {decided}</p>;
+    return <p className="text-sm text-ink-muted">Recorded: {decided}</p>;
   }
 
   return (
-    <div className="flex flex-col gap-2 rounded-lg border border-white/10 bg-white/5 p-4">
+    <div className="flex flex-col gap-3 rounded-lg border border-status-blocked/30 bg-status-blocked/[0.06] p-4">
       <p className="text-sm font-medium text-status-blocked">
         Low confidence — this step needs human review.
       </p>
@@ -30,28 +30,28 @@ export function ReviewForm({ stepId }: { stepId: string }) {
         value={note}
         onChange={(e) => setNote(e.target.value)}
         placeholder="Optional note"
-        className="rounded border border-white/10 bg-black/20 px-3 py-2 text-sm"
+        className="rounded border border-border-soft bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink-faint focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
         rows={2}
       />
       <div className="flex gap-2">
         <button
           disabled={isPending}
           onClick={() => decide("approved")}
-          className="rounded bg-status-passed/20 px-3 py-1.5 text-sm font-medium text-status-passed hover:bg-status-passed/30 disabled:opacity-50"
+          className="rounded bg-status-passed/15 px-3 py-1.5 text-sm font-medium text-status-passed transition-colors hover:bg-status-passed/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-status-passed disabled:opacity-50"
         >
           Approve
         </button>
         <button
           disabled={isPending}
           onClick={() => decide("rejected")}
-          className="rounded bg-status-failed/20 px-3 py-1.5 text-sm font-medium text-status-failed hover:bg-status-failed/30 disabled:opacity-50"
+          className="rounded bg-status-failed/15 px-3 py-1.5 text-sm font-medium text-status-failed transition-colors hover:bg-status-failed/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-status-failed disabled:opacity-50"
         >
           Reject
         </button>
         <button
           disabled={isPending}
           onClick={() => decide("false_positive")}
-          className="rounded bg-white/10 px-3 py-1.5 text-sm font-medium text-white/70 hover:bg-white/20 disabled:opacity-50"
+          className="rounded bg-surface-raised px-3 py-1.5 text-sm font-medium text-ink-muted transition-colors hover:bg-border-soft hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50"
         >
           False positive
         </button>

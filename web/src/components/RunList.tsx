@@ -3,7 +3,7 @@ import type { RunListItem } from "@/lib/types";
 
 export function RunList({ runs }: { runs: RunListItem[] }) {
   if (runs.length === 0) {
-    return <p className="text-white/50">No pipeline runs yet.</p>;
+    return <p className="text-ink-muted">No pipeline runs yet.</p>;
   }
 
   return (

@@ -3,37 +3,51 @@ import { StatusBadge } from "@/components/StatusBadge";
 import type { RunWithSteps } from "@/lib/types";
 
 export function StepTimeline({ run }: { run: RunWithSteps }) {
-  return (
-    <div className="flex flex-col gap-6">
-      <div>
-        <div className="flex items-center gap-3">
-          <h1 className="text-2xl font-semibold">{run.appName}</h1>
-          <span className="text-xs uppercase tracking-wide text-white/40">{run.status}</span>
-        </div>
-        <p className="text-sm text-white/50">{run.baseUrl ?? run.repoUrl}</p>
-      </div>
+  const firstPendingIndex = run.steps.findIndex((s) => s.status === "pending");
 
-      <div className="flex flex-col gap-4">
-        {run.steps.map((step) => (
-          <div key={step.id} className="flex flex-col gap-3 rounded-lg border border-white/10 p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="font-medium">{step.stepId}</div>
-                <div className="text-sm text-white/50">{step.instruction}</div>
+  return (
+    <div className="flex flex-col gap-3">
+      {run.steps.map((step, i) => {
+        const isRunning = run.status === "running" && i === firstPendingIndex;
+
+        return (
+          <div
+            key={step.id}
+            className={`flex flex-col gap-3 rounded-lg border p-4 transition-colors ${
+              isRunning
+                ? "border-accent/50 bg-accent-soft"
+                : "border-border-soft bg-surface"
+            }`}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="font-mono text-sm font-medium">{step.stepId}</div>
+                <div className="mt-0.5 text-sm text-ink-muted">{step.instruction}</div>
               </div>
-              <StatusBadge status={step.status} />
+              {isRunning ? (
+                <span className="inline-flex shrink-0 items-center gap-1.5 text-xs font-medium text-accent">
+                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent" />
+                  Running
+                </span>
+              ) : (
+                <div className="shrink-0">
+                  <StatusBadge status={step.status} />
+                </div>
+              )}
             </div>
 
             {step.dependsOn.length > 0 && (
-              <div className="text-xs text-white/40">depends on: {step.dependsOn.join(", ")}</div>
+              <div className="font-mono text-xs text-ink-faint">
+                depends on {step.dependsOn.join(", ")}
+              </div>
             )}
 
             {(step.status === "failed" ||
               step.status === "blocked" ||
               step.status === "fixed_and_verified") && <EvidencePanel step={step} />}
           </div>
-        ))}
-      </div>
+        );
+      })}
     </div>
   );
 }

@@ -9,7 +9,7 @@ const LABEL: Record<StepStatus, string> = {
 };
 
 const DOT_CLASS: Record<StepStatus, string> = {
-  pending            : "bg-white/30",
+  pending            : "bg-ink-faint",
   passed             : "bg-status-passed",
   failed             : "bg-status-failed",
   blocked            : "bg-status-blocked",
@@ -17,7 +17,7 @@ const DOT_CLASS: Record<StepStatus, string> = {
 };
 
 const TEXT_CLASS: Record<StepStatus, string> = {
-  pending            : "text-white/60",
+  pending            : "text-ink-muted",
   passed             : "text-status-passed",
   failed             : "text-status-failed",
   blocked            : "text-status-blocked",
