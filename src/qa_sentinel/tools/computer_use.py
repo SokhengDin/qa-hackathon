@@ -8,6 +8,7 @@ from google.genai._gaos.lib.compat_errors import BadRequestError
 from playwright.async_api import async_playwright
 
 from qa_sentinel.config.settings import settings
+from qa_sentinel.tools import shared_chromium
 
 MODEL        = "gemini-3.5-flash"
 TURN_LIMIT   = 15
@@ -36,6 +37,14 @@ report it rather than interacting with it further.
 
 RULE 3 — Default behavior is to actuate: proactively perform the steps needed
 to complete the requested test instruction, using only the on-screen UI.
+
+RULE 4 — Be efficient: perform each required action exactly once, in the
+order implied by the instruction. Do not repeat a click, type, or navigation
+that already succeeded, do not re-submit a form that already went through,
+and do not restart the sequence from the beginning after already making
+progress. If you are unsure whether the last action worked, take one more
+look at the current screen rather than redoing the action. Stop and report
+as soon as the instruction's goal is met or clearly cannot be met.
 """.strip()
 
 
@@ -44,7 +53,6 @@ async def run_ui_test_step(
     url          : str,
     screen_width : int = 1440,
     screen_height: int = 900,
-    headless     : bool = False,
 ) -> dict:
     client        = genai.Client(api_key=settings.GEMINI_API_KEY)
     actions_taken = []
@@ -54,7 +62,7 @@ async def run_ui_test_step(
     log: list[dict] = []
 
     async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=headless)
+        browser = await p.chromium.connect_over_cdp(shared_chromium.CDP_URL)
         context = await browser.new_context(viewport={"width": screen_width, "height": screen_height})
         page    = await context.new_page()
         await page.goto(url)
@@ -133,7 +141,7 @@ async def run_ui_test_step(
         EVIDENCE_DIR.mkdir(parents=True, exist_ok=True)
         screenshot_path = str(EVIDENCE_DIR / f"{instruction[:30].replace(' ', '_')}_{turn}.png")
         await page.screenshot(path=screenshot_path)
-        await browser.close()
+        await context.close()
 
     return {
         "status"         : status,

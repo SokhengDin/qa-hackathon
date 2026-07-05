@@ -9,6 +9,7 @@ from qa_sentinel.api.runner import execute_run
 from qa_sentinel.api.test_criteria_md import parse_test_criteria_md
 from qa_sentinel.config.settings import settings
 from qa_sentinel.state.session_store import SessionStore
+from qa_sentinel.tools import shared_chromium
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
 logging.getLogger("qa_sentinel").setLevel(logging.INFO)
@@ -22,7 +23,9 @@ store = SessionStore(settings.DATABASE_URL)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await store.connect()
+    await shared_chromium.start(headless=False)
     yield
+    await shared_chromium.stop()
     await store.close()
 
 

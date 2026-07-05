@@ -5,8 +5,9 @@ from qa_sentinel.callbacks.feature_gate     import feature_gate
 from qa_sentinel.callbacks.safety_guard     import guard_run_ui_test_step
 from qa_sentinel.tools.chrome_devtools_mcp  import build_chrome_devtools_toolset
 from qa_sentinel.tools.computer_use         import run_ui_test_step
+from qa_sentinel.tools.shared_chromium      import CDP_URL
 
-chrome_devtools = build_chrome_devtools_toolset()
+chrome_devtools = build_chrome_devtools_toolset(cdp_url=CDP_URL)
 
 
 def _after_tool(tool, args, tool_context, tool_response):
@@ -37,6 +38,15 @@ test_runner_agent = LlmAgent(
         "been misread as a local security probe and blocked outright. Never "
         "repeat the raw URL back in the instruction text; just describe what "
         "the current page is and what to check for.\n\n"
+        "Be efficient inside run_ui_test_step: perform each required action "
+        "exactly once, in the order given, then wait briefly and check the "
+        "result. Do not repeat an action that already succeeded, do not "
+        "re-navigate to a page you're already on, and do not retry a "
+        "submission that already went through — this wastes turns and can "
+        "trigger duplicate side effects (e.g. a second signup for the same "
+        "email). If the first attempt's outcome is unclear, take one more "
+        "screenshot to check — do not restart the whole sequence from the "
+        "beginning.\n\n"
         "After each step, compare the resulting screenshot/state against the "
         "expected outcome in the test criteria.\n\n"
         "IF the outcome matches expectations: mark the step passed, move on. "
