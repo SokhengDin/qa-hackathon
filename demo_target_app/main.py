@@ -37,6 +37,15 @@ DISCOUNT_CODES = {
     "SAVE10": 0.10,
 }
 
+# BUG: missing an entry for "ceramic-mug" — whoever added this table forgot
+# the most popular product. Any checkout that includes it throws an
+# unhandled KeyError, which FastAPI turns into a bare 500 with a traceback
+# in the server log and no user-facing message.
+SHIPPING_COST_BY_PRODUCT = {
+    "steel-bottle": 4.00,
+    "canvas-tote": 3.00,
+}
+
 
 def get_cart(request: Request) -> dict:
     return request.session.setdefault("cart", {})
@@ -104,10 +113,12 @@ def view_cart(request: Request):
 
 @app.post("/cart/apply-discount")
 def apply_discount(request: Request, code: str = Form(...)):
-    # BUG: looks up the discount table with the raw user input instead of the
-    # normalized (uppercased) code, so a valid code entered in lowercase — or
-    # with trailing whitespace, which the input field does not trim — throws
-    # a KeyError instead of applying the discount or reporting "invalid code".
+    # BUG: looks up the discount table with the raw user input with no
+    # validation or error handling at all, so ANY code that isn't an exact
+    # case-sensitive match for a real key throws an unhandled KeyError,
+    # which FastAPI turns into a bare 500 with a traceback in the server log
+    # and no user-facing message. There's no try/except and no "invalid code"
+    # branch — the fix is to validate the code exists before using it.
     rate = DISCOUNT_CODES[code]
     request.session["discount_rate"] = rate
     request.session["discount_code"] = code
@@ -118,12 +129,11 @@ def apply_discount(request: Request, code: str = Form(...)):
 def checkout(request: Request):
     cart = get_cart(request)
 
-    # BUG: never checks product stock before completing the order, so an
-    # out-of-stock item (stock=0) silently "ships" — the order confirms
-    # instead of being rejected. This produces no console error or failed
-    # network request; it's only visible by comparing the confirmation
-    # screen against what should have happened.
-    order_total = sum(PRODUCTS[pid]["price"] * qty for pid, qty in cart.items())
+    order_total = 0.0
+    for product_id, quantity in cart.items():
+        product = PRODUCTS[product_id]
+        shipping = SHIPPING_COST_BY_PRODUCT[product_id]
+        order_total += (product["price"] + shipping) * quantity
 
     request.session["cart"] = {}
     request.session["discount_rate"] = 0.0

@@ -2,6 +2,7 @@ import logging
 import os
 from contextlib import asynccontextmanager
 from typing import Literal
+from urllib.parse import urlparse
 
 from fastapi import BackgroundTasks, FastAPI, Form, HTTPException, UploadFile
 
@@ -32,13 +33,17 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="QA Sentinel Runner", lifespan=lifespan)
 
 
+def _port_from_base_url(base_url: str) -> int:
+    return urlparse(base_url).port or 80
+
+
 @app.post("/api/agent/runs", status_code=202)
 async def create_and_start_run(
     background_tasks: BackgroundTasks,
     test_criteria    : UploadFile,
     repo_url         : str = Form(...),
-    start_command    : str = Form(...),
-    port             : int = Form(...),
+    start_command    : str | None = Form(None),
+    port             : int | None = Form(None),
     repo_ref         : str = Form("main"),
     install_command  : str | None = Form(None),
     otel_endpoint    : str | None = Form(None),
@@ -52,6 +57,15 @@ async def create_and_start_run(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=f"invalid test_criteria .md: {exc}") from exc
 
+    if not local and (start_command is None or port is None):
+        raise HTTPException(
+            status_code=400,
+            detail="start_command and port are required unless local=true",
+        )
+
+    resolved_port = port if port is not None else _port_from_base_url(criteria.base_url)
+    resolved_start_command = start_command or "none"
+
     run_id = await store.create_run(
         app_type        = app_type,
         app_name        = criteria.app_name,
@@ -59,8 +73,8 @@ async def create_and_start_run(
         repo_url        = repo_url,
         repo_ref        = repo_ref,
         install_command = install_command,
-        start_command   = start_command,
-        port            = port,
+        start_command   = resolved_start_command,
+        port            = resolved_port,
         otel_endpoint   = otel_endpoint,
         steps           = [s.model_dump() for s in criteria.steps],
         environment_id  = environment_id,
