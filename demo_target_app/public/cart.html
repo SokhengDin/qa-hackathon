@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cart — Cambria Shop</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body class="min-h-screen bg-neutral-50 text-neutral-900">
+  <header class="sticky top-0 z-10 border-b border-neutral-200 bg-white/80 backdrop-blur-sm">
+    <div class="mx-auto flex max-w-3xl items-center justify-between px-6 py-4">
+      <a href="/" class="flex items-center gap-2 text-lg font-semibold text-neutral-900">
+        <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-brand text-white">
+          <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M3 3h2l.4 2M7 13h10l3.6-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17M17 13v4a2 2 0 01-2 2H9a2 2 0 01-2-2v-4m10 0H7" />
+          </svg>
+        </span>
+        Cambria Shop
+      </a>
+      <a href="/cart.html" class="relative flex items-center gap-1.5 text-sm font-medium text-brand" data-testid="cart-link">
+        <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M3 3h2l.4 2M7 13h10l3.6-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17M17 13v4a2 2 0 01-2 2H9a2 2 0 01-2-2v-4m10 0H7" />
+        </svg>
+        Cart
+        <span id="cart-count-badge" class="hidden h-5 min-w-5 items-center justify-center rounded-full bg-brand px-1 text-xs font-semibold text-white" data-testid="cart-count"></span>
+      </a>
+    </div>
+  </header>
+
+  <main class="mx-auto max-w-3xl px-6 py-10">
+    <h1 class="mb-8 text-2xl font-semibold tracking-tight">Your cart</h1>
+    <div id="cart-empty" class="hidden flex-col items-center rounded-2xl border border-dashed border-neutral-300 bg-white px-6 py-16 text-center">
+      <div class="flex h-14 w-14 items-center justify-center rounded-full bg-neutral-100 text-neutral-400">
+        <svg class="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.75">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M3 3h2l.4 2M7 13h10l3.6-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17M17 13v4a2 2 0 01-2 2H9a2 2 0 01-2-2v-4m10 0H7" />
+        </svg>
+      </div>
+      <p class="mt-4 text-sm font-medium text-neutral-600">Your cart is empty</p>
+      <a href="/" class="mt-4 rounded-lg border border-neutral-300 px-4 py-2 text-sm font-medium hover:border-brand">Browse products</a>
+    </div>
+
+    <div id="cart-filled" class="hidden">
+      <div id="cart-lines" class="divide-y divide-neutral-200 overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-card" data-testid="cart-lines"></div>
+
+      <form id="discount-form" class="mt-6 flex gap-2">
+        <div class="relative flex-1">
+          <svg class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M20.59 13.41L11 3.83A2 2 0 009.59 3.24L4 3a1 1 0 00-1 1l.24 5.59a2 2 0 00.59 1.41l9.58 9.58a2 2 0 002.83 0l4.35-4.35a2 2 0 000-2.82zM7 8a1 1 0 110-2 1 1 0 010 2z" />
+          </svg>
+          <input
+            type="text"
+            id="discount-code-input"
+            placeholder="Discount code"
+            class="w-full rounded-lg border border-neutral-300 py-2.5 pl-9 pr-3 text-sm focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
+            data-testid="discount-input"
+          >
+        </div>
+        <button
+          type="submit"
+          class="rounded-lg border border-neutral-300 px-4 py-2.5 text-sm font-medium hover:border-brand"
+          data-testid="apply-discount"
+        >
+          Apply
+        </button>
+      </form>
+
+      <div id="cart-summary" class="mt-6 space-y-2 rounded-2xl border border-neutral-200 bg-white p-6 shadow-card" data-testid="cart-summary"></div>
+
+      <button
+        id="checkout-button"
+        type="button"
+        class="mt-6 flex w-full items-center justify-center gap-2 rounded-lg bg-brand px-4 py-3 text-sm font-medium text-white shadow-sm transition-colors hover:bg-brand-dark"
+        data-testid="checkout"
+      >
+        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M3 8l9-5 9 5-9 5-9-5zm0 0v8l9 5m0-13v13m0-13l9 5v8l-9 5" />
+        </svg>
+        Checkout
+      </button>
+    </div>
+
+    <div id="checkout-confirmation" class="hidden rounded-2xl border border-neutral-200 bg-white p-10 text-center shadow-card" data-testid="order-confirmation">
+      <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-brand/10">
+        <svg class="h-8 w-8 text-brand" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+        </svg>
+      </div>
+      <h1 class="mt-5 text-2xl font-semibold tracking-tight">Order confirmed</h1>
+      <p class="mt-2 text-neutral-500">Thanks for your purchase — a confirmation has been sent to your email.</p>
+      <p id="confirmation-total" class="mt-6 text-3xl font-semibold tracking-tight" data-testid="order-total"></p>
+      <a href="/" class="mt-8 inline-flex items-center gap-2 rounded-lg border border-neutral-300 px-5 py-2.5 text-sm font-medium hover:border-brand">
+        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
+        </svg>
+        Continue shopping
+      </a>
+    </div>
+
+    <div id="checkout-error" class="hidden rounded-2xl border border-out-of-stock/30 bg-out-of-stock/5 p-6" data-testid="checkout-error">
+      <p class="text-sm font-medium text-out-of-stock">Something went wrong completing your order. Please try again.</p>
+    </div>
+  </main>
+
+  <script src="/app.js"></script>
+  <script src="/pages/cart.js"></script>
+</body>
+</html>
