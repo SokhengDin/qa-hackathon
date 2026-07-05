@@ -17,7 +17,7 @@ pr_agent = LlmAgent(
         "any placeholder value for them.\n\n"
         "Only open a PR for features marked 'fixed_and_verified'. Call "
         "open_evidence_pr exactly once, passing: base_branch ('main'), "
-        "pr_title (a concise one-line summary), and fix_summary (FixWriter's "
+        "pr_title (a concise one-line summary), and fix_summary (FixerAgent's "
         "explanation of the fix, in your own words). One PR per feature "
         "fixed in this run, not one giant combined PR."
     ),

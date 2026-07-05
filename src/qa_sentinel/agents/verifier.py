@@ -8,10 +8,12 @@ from qa_sentinel.tools.github_pr import branch_exists
 
 
 def verify_fix(repo_full_name: str, branch_name: str) -> dict:
-    """Confirms FixWriter's branch actually landed on GitHub with a real commit,
-    rather than trusting FixWriter's own claim that it wrote a fix. Does not
-    restart the live app or re-run the failing UI step — it only proves a
-    real, pushed diff exists for this fix."""
+    """Confirms FixerAgent's branch actually landed on GitHub with a real
+    commit. By the time this runs, TestRunner has already re-driven the real
+    browser flow against the restarted live app and confirmed it passes
+    (that's what routes here at all — see compute_step_verdict's
+    "fix_confirmed" route) — this is the final, independent proof that a
+    real diff backs that passing result, not just a claim."""
     if not settings.GITHUB_TOKEN:
         return {"status": "error", "output_text": "GITHUB_TOKEN not configured — cannot verify the branch."}
     if not repo_full_name or not branch_name:
