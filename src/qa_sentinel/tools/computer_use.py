@@ -42,6 +42,7 @@ def run_ui_test_step(
     url          : str,
     screen_width : int = 1440,
     screen_height: int = 900,
+    headless     : bool = True,
 ) -> dict:
     """Drives the target app's UI via Gemini Computer Use to execute one test step.
 
@@ -54,6 +55,13 @@ def run_ui_test_step(
     receives screenshots and returns click/type instructions turn by turn.
     "Gemini controls the browser" is accurate; "Gemini launches the app" is
     not. See tasks/task_4.md §1.
+
+    `headless` defaults to True for automated pipeline runs (agents/test_runner.py
+    always uses this default — the pipeline itself doesn't need a display).
+    Pass headless=False with DISPLAY=:99 set in the calling shell to watch
+    Computer Use work live over VNC on Ubuntu — see tasks/task_5.md §3/§4.
+    Headed mode on macOS crashes Playwright's bundled Chromium on Apple
+    Silicon (SIGBUS); Ubuntu is the confirmed environment for this project.
 
     Returns:
         dict with status ("passed"/"failed"/"blocked"), screenshot_path,
@@ -71,7 +79,7 @@ def run_ui_test_step(
     log: list[dict] = []
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
+        browser = p.chromium.launch(headless=headless)
         context = browser.new_context(viewport={"width": screen_width, "height": screen_height})
         page    = context.new_page()
         page.goto(url)
