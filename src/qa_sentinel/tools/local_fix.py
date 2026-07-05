@@ -153,15 +153,37 @@ def _wait_until(predicate, timeout_s: int, interval_s: float = 0.5) -> bool:
     return False
 
 
+def _pidfile_for(repo_url: str) -> Path:
+    return _workdir_for(repo_url) / "qa_sentinel_app.pid"
+
+
+def kill_tracked_app(repo_url: str) -> dict:
+    """Kills the exact process this pipeline itself spawned via
+    restart_live_app, using the PID it wrote down at spawn time — not a
+    port-based guess (fuser can silently no-op, or race with a process still
+    shutting down). Safe to call even if nothing is tracked."""
+    pidfile = _pidfile_for(repo_url)
+    if not pidfile.exists():
+        return {"status": "success", "message": "No tracked app process for this repo."}
+
+    pid = pidfile.read_text().strip()
+    subprocess.run(f"kill -9 {pid} 2>/dev/null || true", shell=True)
+    pidfile.unlink(missing_ok=True)
+    return {"status": "success", "message": f"Killed tracked PID {pid}."}
+
+
 def restart_live_app(port: int, repo_url: str, start_command: str) -> dict:
     """Kills whatever is listening on `port` (the live app TestRunner has been
-    testing against) and restarts it from the FIXED local clone, on the same
-    port, so the next TestRunner pass exercises the real fix through the
-    actual running app — not a throwaway copy. Waits for the port to actually
-    free up before rebinding (fuser -k only sends the signal, it does not
-    wait for the process to exit), and waits for the new process to actually
-    start listening before declaring success."""
+    testing against) — first the exact PID this pipeline previously tracked
+    for this repo (if any), then falls back to fuser by port for anything
+    else — and restarts it from the FIXED local clone, on the same port, so
+    the next TestRunner pass exercises the real fix through the actual
+    running app. The newly spawned PID is written to a pidfile so a later
+    kill_tracked_app call (or the next restart_live_app) can kill exactly
+    this process instead of guessing by port."""
     workdir = _workdir_for(repo_url)
+
+    kill_tracked_app(repo_url)
 
     kill = subprocess.run(
         f"fuser -k {port}/tcp || true",
@@ -170,13 +192,13 @@ def restart_live_app(port: int, repo_url: str, start_command: str) -> dict:
     if not _wait_until(lambda: _port_is_free(port), timeout_s=10):
         return {
             "status" : "error",
-            "message": f"Port {port} was still in use {10}s after attempting to kill it.",
+            "message": f"Port {port} was still in use 10s after attempting to kill it.",
             "kill_output": kill.stdout + kill.stderr,
         }
 
     log_path = workdir / "qa_sentinel_restart.log"
     with open(log_path, "w") as log_file:
-        subprocess.Popen(
+        process = subprocess.Popen(
             start_command,
             shell=True,
             cwd=workdir,
@@ -184,6 +206,7 @@ def restart_live_app(port: int, repo_url: str, start_command: str) -> dict:
             stderr=subprocess.STDOUT,
             start_new_session=True,
         )
+    _pidfile_for(repo_url).write_text(str(process.pid))
 
     if not _wait_until(lambda: not _port_is_free(port), timeout_s=RESTART_WAIT_S):
         boot_output = log_path.read_text() if log_path.exists() else ""
@@ -204,4 +227,5 @@ def restart_live_app(port: int, repo_url: str, start_command: str) -> dict:
         "http_code"   : check.stdout.strip(),
         "kill_output" : kill.stdout + kill.stderr,
         "restart_log" : str(log_path),
+        "pid"         : process.pid,
     }

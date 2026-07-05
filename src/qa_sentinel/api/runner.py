@@ -9,6 +9,7 @@ from qa_sentinel.agents.workflow import root_agent
 from qa_sentinel.schemas.test_criteria import TestCriteria, TestStep
 from qa_sentinel.state.session_store import SessionStore
 from qa_sentinel.tools.github_pr import repo_full_name_from_url
+from qa_sentinel.tools.local_fix import kill_tracked_app
 from qa_sentinel.tools.sandbox_provision import provision_and_boot_app
 
 logger = logging.getLogger("qa_sentinel.runner")
@@ -19,6 +20,8 @@ APP_NAME = "qa_sentinel_pipeline"
 async def execute_run(store: SessionStore, run_id: UUID, claimed: dict) -> None:
     if claimed["local"]:
         logger.info("[run %s] local mode, skipping sandbox provisioning", run_id)
+        cleanup = kill_tracked_app(claimed["repo_url"])
+        logger.info("[run %s] pre-run cleanup of any orphaned app process: %s", run_id, cleanup["message"])
         await store.log_event(
             run_id, "test_runner", "status_change",
             {"status": "local_mode", "base_url": claimed["base_url"]},
